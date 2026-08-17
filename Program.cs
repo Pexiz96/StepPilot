@@ -13,7 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents(options =>
     {
-        options.DetailedErrors = true;
+        options.DetailedErrors = builder.Environment.IsDevelopment();
     });
 
 builder.Services.AddMudServices();
@@ -85,6 +85,14 @@ else
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    context.Response.Headers.XFrameOptions = "SAMEORIGIN";
+    context.Response.Headers.ReferrerPolicy = "strict-origin-when-cross-origin";
+    await next();
+});
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
