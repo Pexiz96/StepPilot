@@ -1,19 +1,12 @@
 @page "/"
-
 @attribute [Authorize]
-
 @inject DashboardService DashboardService
 @inject CurrentUserService CurrentUser
 
 <PageTitle>Dashboard | StepPilot</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-1">
-    Dashboard
-</MudText>
-
-<MudText Color="Color.Secondary" Class="mb-6">
-    Willkommen bei StepPilot.
-</MudText>
+<MudText Typo="Typo.h4" Class="mb-1">Dashboard</MudText>
+<MudText Color="Color.Secondary" Class="mb-6">Personalplanung auf einen Blick.</MudText>
 
 @if (_loading)
 {
@@ -21,72 +14,53 @@
 }
 else if (_isSuperAdmin)
 {
-    <MudAlert Severity="Severity.Info"
-              Variant="Variant.Outlined">
-
-        Du bist als SuperAdmin angemeldet.
-
-        Über den Bereich „Unternehmen“ kannst du Unternehmen
-        und deren Owner verwalten.
-
-    </MudAlert>
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Du bist als SuperAdmin angemeldet. Über „Unternehmen“ verwaltest du Mandanten und deren Owner.</MudAlert>
 }
 else if (!_hasCompany)
 {
-    <MudAlert Severity="Severity.Warning"
-              Variant="Variant.Outlined">
-
-        Deinem Benutzerkonto ist noch kein Unternehmen zugeordnet.
-
-    </MudAlert>
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Deinem Benutzerkonto ist noch kein Unternehmen zugeordnet.</MudAlert>
 }
 else if (_stats is not null)
 {
     <MudGrid>
-
-        <MudItem xs="12" sm="6" lg="3">
-            <MudPaper Class="pa-5">
-                <MudText>Mitarbeiter</MudText>
-                <MudText Typo="Typo.h4">
-                    @_stats.Employees
-                </MudText>
-            </MudPaper>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" lg="3">
-            <MudPaper Class="pa-5">
-                <MudText>Schichten heute</MudText>
-                <MudText Typo="Typo.h4">
-                    @_stats.TodayShifts
-                </MudText>
-            </MudPaper>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" lg="3">
-            <MudPaper Class="pa-5">
-                <MudText>Abwesend</MudText>
-                <MudText Typo="Typo.h4">
-                    @_stats.Absent
-                </MudText>
-            </MudPaper>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" lg="3">
-            <MudPaper Class="pa-5">
-                <MudText>Offene Schichten</MudText>
-                <MudText Typo="Typo.h4">
-                    @_stats.OpenShifts
-                </MudText>
-            </MudPaper>
-        </MudItem>
-
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-5"><MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary"/><MudText Color="Color.Secondary">Aktive Mitarbeiter</MudText><MudText Typo="Typo.h4">@_stats.Employees</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-5"><MudIcon Icon="@Icons.Material.Filled.Today" Color="Color.Primary"/><MudText Color="Color.Secondary">Schichten heute</MudText><MudText Typo="Typo.h4">@_stats.TodayShifts</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-5"><MudIcon Icon="@Icons.Material.Filled.EventBusy" Color="Color.Warning"/><MudText Color="Color.Secondary">Heute abwesend</MudText><MudText Typo="Typo.h4">@_stats.Absent</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-5"><MudIcon Icon="@Icons.Material.Filled.PersonAddAlt" Color="@(_stats.OpenShifts > 0 ? Color.Error : Color.Success)"/><MudText Color="Color.Secondary">Offene Besetzungen · 7 Tage</MudText><MudText Typo="Typo.h4">@_stats.OpenShifts</MudText></MudPaper></MudItem>
     </MudGrid>
+
+    <MudGrid Class="mt-4">
+        <MudItem xs="12" md="8">
+            <MudPaper Class="pa-5">
+                <MudStack Row="true" AlignItems="AlignItems.Center"><div><MudText Typo="Typo.h6">Besetzungsgrad der nächsten 7 Tage</MudText><MudText Color="Color.Secondary">Wie viel des geplanten Personalbedarfs bereits abgedeckt ist.</MudText></div><MudSpacer/><MudText Typo="Typo.h4">@_stats.Coverage.ToString("0.#") %</MudText></MudStack>
+                <MudProgressLinear Value="@_stats.Coverage" Color="@(_stats.Coverage < 80 ? Color.Error : _stats.Coverage < 95 ? Color.Warning : Color.Success)" Rounded="true" Size="Size.Large" Class="mt-4" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-5">
+                <MudText Typo="Typo.h6">Handlungsbedarf</MudText>
+                <MudText Class="mt-3">Urlaubsanträge offen: <b>@_stats.PendingAbsences</b></MudText>
+                <MudText>Veröffentlichte Pläne: <b>@_stats.PublishedWeeks</b></MudText>
+                @if (_stats.OpenShifts > 0)
+                {
+                    <MudButton Href="/schedule" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">Planung öffnen</MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_stats.OpenShifts > 0 || _stats.PendingAbsences > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-5">Es gibt Punkte, die vor der nächsten Dienstplan-Veröffentlichung geprüft werden sollten.</MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-5">Aktuell sind keine dringenden Planungsaufgaben offen.</MudAlert>
+    }
 }
 
-@code
-{
+@code {
     private DashboardStats? _stats;
-
     private bool _isSuperAdmin;
     private bool _hasCompany;
     private bool _loading = true;
@@ -94,25 +68,10 @@ else if (_stats is not null)
     protected override async Task OnInitializedAsync()
     {
         var user = await CurrentUser.GetUserAsync();
-
-        if (user is null)
-        {
-            _loading = false;
-            return;
-        }
-
-        _isSuperAdmin =
-            await CurrentUser.IsSuperAdminAsync();
-
-        _hasCompany =
-            user.CompanyId is not null;
-
-        if (!_isSuperAdmin && _hasCompany)
-        {
-            _stats =
-                await DashboardService.GetAsync();
-        }
-
+        if (user is null) { _loading = false; return; }
+        _isSuperAdmin = await CurrentUser.IsSuperAdminAsync();
+        _hasCompany = user.CompanyId is not null;
+        if (!_isSuperAdmin && _hasCompany) _stats = await DashboardService.GetAsync();
         _loading = false;
     }
 }
