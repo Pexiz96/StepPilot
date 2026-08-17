@@ -4,48 +4,124 @@
 @inject TenantGuard TenantGuard
 
 <PageTitle>Auswertungen | StepPilot</PageTitle>
-<MudText Typo="Typo.h4" Class="mb-4">Auswertungen</MudText>
 
-<MudTable Items="_rows">
-    <HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>Sollstunden</MudTh><MudTh>Geplante Stunden</MudTh><MudTh>Differenz</MudTh></HeaderContent>
-    <RowTemplate>
-        <MudTd>@context.Name</MudTd><MudTd>@context.Target</MudTd><MudTd>@context.Planned</MudTd><MudTd>@context.Difference</MudTd>
-    </RowTemplate>
-</MudTable>
+<MudText Typo="Typo.h4" Class="mb-2">Auswertungen</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Arbeitszeit, Auslastung und Besetzungsgrad für einen frei wählbaren Zeitraum.</MudText>
+
+<MudPaper Class="pa-4 mb-5" Elevation="1">
+    <MudGrid>
+        <MudItem xs="12" md="4"><MudDatePicker Label="Von" @bind-Date="_from" Variant="Variant.Outlined" /></MudItem>
+        <MudItem xs="12" md="4"><MudDatePicker Label="Bis" @bind-Date="_to" Variant="Variant.Outlined" /></MudItem>
+        <MudItem xs="12" md="4" Class="d-flex align-center"><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Load">Auswertung aktualisieren</MudButton></MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Class="mb-5">
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Geplante Stunden</MudText><MudText Typo="Typo.h4">@_plannedTotal.ToString("0.##")</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Sollstunden</MudText><MudText Typo="Typo.h4">@_targetTotal.ToString("0.##")</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Offene Besetzungen</MudText><MudText Typo="Typo.h4">@_openAssignments</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Besetzungsgrad</MudText><MudText Typo="Typo.h4">@_coverage.ToString("0.#") %</MudText></MudPaper></MudItem>
+    </MudGrid>
+
+    <MudTable Items="_rows" Hover="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Mitarbeiter</MudTh><MudTh>Sollstunden</MudTh><MudTh>Geplant</MudTh><MudTh>Differenz</MudTh><MudTh>Auslastung</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Name</MudTd>
+            <MudTd>@context.Target.ToString("0.##") h</MudTd>
+            <MudTd>@context.Planned.ToString("0.##") h</MudTd>
+            <MudTd>@Signed(context.Difference) h</MudTd>
+            <MudTd>
+                <MudProgressLinear Value="@context.Utilization" Color="@(context.Utilization > 105 ? Color.Error : context.Utilization > 95 ? Color.Warning : Color.Primary)" Rounded="true" />
+                <MudText Typo="Typo.caption">@context.Utilization.ToString("0.#") %</MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
 
 @code {
+    private DateTime? _from = StartOfCurrentWeek();
+    private DateTime? _to = StartOfCurrentWeek().AddDays(6);
     private List<Row> _rows = [];
+    private bool _loading = true;
+    private decimal _plannedTotal;
+    private decimal _targetTotal;
+    private int _openAssignments;
+    private decimal _coverage;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
     {
-        var companyId = await TenantGuard.RequireCompanyIdAsync();
-        await using var db = await DbFactory.CreateDbContextAsync();
-
-        var employees = await db.Employees.AsNoTracking()
-            .Where(x => x.CompanyId == companyId && x.IsActive)
-            .ToListAsync();
-
-        var assignments = await db.ShiftAssignments.AsNoTracking()
-            .Include(x => x.Shift)
-            .Where(x => x.CompanyId == companyId)
-            .ToListAsync();
-
-        _rows = employees.Select(e =>
+        if (_from is null || _to is null) return;
+        _loading = true;
+        try
         {
-            decimal planned = assignments.Where(a => a.EmployeeId == e.Id && a.Shift is not null)
-                .Sum(a => Hours(a.Shift!));
+            var start = DateOnly.FromDateTime(_from.Value.Date);
+            var end = DateOnly.FromDateTime(_to.Value.Date);
+            if (end < start) (start, end) = (end, start);
 
-            return new Row($"{e.FirstName} {e.LastName}", e.WeeklyHours, planned, planned - e.WeeklyHours);
-        }).ToList();
+            var companyId = await TenantGuard.RequireCompanyIdAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            var employees = await db.Employees.AsNoTracking()
+                .Where(x => x.CompanyId == companyId && x.IsActive)
+                .OrderBy(x => x.LastName).ThenBy(x => x.FirstName)
+                .ToListAsync();
+
+            var assignments = await db.ShiftAssignments.AsNoTracking()
+                .Include(x => x.Shift)
+                .Where(x => x.CompanyId == companyId && x.Shift != null && x.Shift.Date >= start && x.Shift.Date <= end)
+                .ToListAsync();
+
+            var shifts = await db.Shifts.AsNoTracking()
+                .Where(x => x.CompanyId == companyId && x.Date >= start && x.Date <= end)
+                .Select(x => new { x.RequiredEmployees, Assigned = x.Assignments.Count })
+                .ToListAsync();
+
+            var days = end.DayNumber - start.DayNumber + 1;
+            var weeks = days / 7m;
+
+            _rows = employees.Select(e =>
+            {
+                var planned = assignments.Where(a => a.EmployeeId == e.Id && a.Shift is not null).Sum(a => Hours(a.Shift!));
+                var target = e.WeeklyHours * weeks;
+                var utilization = target > 0 ? planned / target * 100m : 0m;
+                return new Row($"{e.FirstName} {e.LastName}", target, planned, planned - target, utilization);
+            }).ToList();
+
+            _plannedTotal = _rows.Sum(x => x.Planned);
+            _targetTotal = _rows.Sum(x => x.Target);
+            _openAssignments = shifts.Sum(x => Math.Max(0, x.RequiredEmployees - x.Assigned));
+            var required = shifts.Sum(x => x.RequiredEmployees);
+            var assigned = shifts.Sum(x => Math.Min(x.Assigned, x.RequiredEmployees));
+            _coverage = required > 0 ? (decimal)assigned / required * 100m : 100m;
+        }
+        finally { _loading = false; }
+    }
+
+    private static DateTime StartOfCurrentWeek()
+    {
+        var today = DateTime.Today;
+        var diff = ((int)today.DayOfWeek + 6) % 7;
+        return today.AddDays(-diff);
     }
 
     private static decimal Hours(Shift shift)
     {
         var minutes = (decimal)(shift.EndTime.ToTimeSpan() - shift.StartTime.ToTimeSpan()).TotalMinutes;
-        if (minutes < 0) minutes += 24 * 60;
+        if (minutes <= 0) minutes += 24 * 60;
         minutes -= shift.BreakMinutes;
         return Math.Max(0, minutes / 60m);
     }
 
-    private sealed record Row(string Name, decimal Target, decimal Planned, decimal Difference);
+    private static string Signed(decimal value) => value > 0 ? $"+{value:0.##}" : value.ToString("0.##");
+    private sealed record Row(string Name, decimal Target, decimal Planned, decimal Difference, decimal Utilization);
 }
