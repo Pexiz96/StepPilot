@@ -8,16 +8,35 @@
 <MudText Typo="Typo.h4" Class="mb-2">Schichtanfragen</MudText>
 <MudText Color="Color.Secondary" Class="mb-5">Prüfe freiwillige Übernahmeanfragen für offene Schichten.</MudText>
 
-@if (!string.IsNullOrWhiteSpace(_message)) { <MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert> }
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+}
 
 <MudGrid Class="mb-4">
-    <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Offene Anfragen</MudText><MudText Typo="Typo.h4">@_requests.Count(x => x.Status == OpenShiftRequestStatus.Pending)</MudText></MudPaper></MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4">
+            <MudText Color="Color.Secondary">Offene Anfragen</MudText>
+            <MudText Typo="Typo.h4">@_requests.Count(x => x.Status == OpenShiftRequestStatus.Pending)</MudText>
+        </MudPaper>
+    </MudItem>
 </MudGrid>
 
 <MudTable Items="_requests" Hover="true" Striped="true">
-    <HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Standort</MudTh><MudTh>Status</MudTh><MudTh>Aktionen</MudTh></HeaderContent>
+    <HeaderContent>
+        <MudTh>Mitarbeiter</MudTh>
+        <MudTh>Datum</MudTh>
+        <MudTh>Zeit</MudTh>
+        <MudTh>Standort</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Aktionen</MudTh>
+    </HeaderContent>
     <RowTemplate>
-        <MudTd>@context.Employee?.FullName</MudTd><MudTd>@context.Shift?.Date.ToString("dd.MM.yyyy")</MudTd><MudTd>@context.Shift?.StartTime.ToString("HH:mm")–@context.Shift?.EndTime.ToString("HH:mm")</MudTd><MudTd>@(context.Shift?.Location?.Name ?? "–")</MudTd><MudTd>@StatusText(context.Status)</MudTd>
+        <MudTd>@EmployeeName(context.Employee)</MudTd>
+        <MudTd>@context.Shift?.Date.ToString("dd.MM.yyyy")</MudTd>
+        <MudTd>@context.Shift?.StartTime.ToString("HH:mm")–@context.Shift?.EndTime.ToString("HH:mm")</MudTd>
+        <MudTd>@(context.Shift?.Location?.Name ?? "–")</MudTd>
+        <MudTd>@StatusText(context.Status)</MudTd>
         <MudTd>
             @if (context.Status == OpenShiftRequestStatus.Pending)
             {
@@ -26,47 +45,125 @@
             }
         </MudTd>
     </RowTemplate>
-    <NoRecordsContent><MudText Class="pa-4" Color="Color.Secondary">Keine Schichtanfragen vorhanden.</MudText></NoRecordsContent>
+    <NoRecordsContent>
+        <MudText Class="pa-4" Color="Color.Secondary">Keine Schichtanfragen vorhanden.</MudText>
+    </NoRecordsContent>
 </MudTable>
 
 @code {
     private List<OpenShiftRequest> _requests = [];
     private string _message = string.Empty;
     private Severity _severity = Severity.Info;
+
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
-        _requests = await db.OpenShiftRequests.AsNoTracking().Include(x => x.Employee).Include(x => x.Shift).ThenInclude(x => x!.Location).Where(x => x.CompanyId == companyId).OrderBy(x => x.Status).ThenByDescending(x => x.CreatedAt).ToListAsync();
+
+        _requests = await db.OpenShiftRequests
+            .AsNoTracking()
+            .Include(x => x.Employee)
+            .Include(x => x.Shift)
+                .ThenInclude(x => x!.Location)
+            .Where(x => x.CompanyId == companyId)
+            .OrderBy(x => x.Status)
+            .ThenByDescending(x => x.CreatedAt)
+            .ToListAsync();
     }
 
-    private static string StatusText(OpenShiftRequestStatus s) => s switch { OpenShiftRequestStatus.Pending => "Offen", OpenShiftRequestStatus.Approved => "Genehmigt", OpenShiftRequestStatus.Rejected => "Abgelehnt", _ => s.ToString() };
+    private static string EmployeeName(Employee? employee)
+        => employee is null
+            ? "–"
+            : $"{employee.FirstName} {employee.LastName}".Trim();
+
+    private static string StatusText(OpenShiftRequestStatus status)
+        => status switch
+        {
+            OpenShiftRequestStatus.Pending => "Offen",
+            OpenShiftRequestStatus.Approved => "Genehmigt",
+            OpenShiftRequestStatus.Rejected => "Abgelehnt",
+            _ => status.ToString()
+        };
 
     private async Task Approve(int requestId)
     {
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
-        var request = await db.OpenShiftRequests.Include(x => x.Shift).ThenInclude(x => x!.Assignments).FirstOrDefaultAsync(x => x.Id == requestId && x.CompanyId == companyId);
-        if (request?.Shift is null || request.Status != OpenShiftRequestStatus.Pending) return;
-        if (request.Shift.Assignments.Count >= request.Shift.RequiredEmployees) { _severity = Severity.Warning; _message = "Die Schicht ist inzwischen vollständig besetzt."; return; }
+
+        var request = await db.OpenShiftRequests
+            .Include(x => x.Shift)
+                .ThenInclude(x => x!.Assignments)
+            .FirstOrDefaultAsync(x => x.Id == requestId && x.CompanyId == companyId);
+
+        if (request?.Shift is null || request.Status != OpenShiftRequestStatus.Pending)
+            return;
+
+        if (request.Shift.Assignments.Count >= request.Shift.RequiredEmployees)
+        {
+            _severity = Severity.Warning;
+            _message = "Die Schicht ist inzwischen vollständig besetzt.";
+            return;
+        }
+
         var conflicts = await PlanningService.ValidateAssignmentAsync(request.EmployeeId, request.ShiftId);
-        if (conflicts.Count > 0) { _severity = Severity.Error; _message = $"Genehmigung nicht möglich: {conflicts[0]}"; return; }
-        db.ShiftAssignments.Add(new ShiftAssignment { CompanyId = companyId, ShiftId = request.ShiftId, EmployeeId = request.EmployeeId });
-        request.Status = OpenShiftRequestStatus.Approved; request.DecidedAt = DateTime.UtcNow;
-        var others = await db.OpenShiftRequests.Where(x => x.CompanyId == companyId && x.ShiftId == request.ShiftId && x.Status == OpenShiftRequestStatus.Pending && x.Id != request.Id).ToListAsync();
-        if (request.Shift.Assignments.Count + 1 >= request.Shift.RequiredEmployees) foreach (var other in others) { other.Status = OpenShiftRequestStatus.Rejected; other.DecidedAt = DateTime.UtcNow; }
-        await db.SaveChangesAsync(); _severity = Severity.Success; _message = "Schichtübernahme wurde genehmigt."; await LoadAsync();
+        if (conflicts.Count > 0)
+        {
+            _severity = Severity.Error;
+            _message = $"Genehmigung nicht möglich: {conflicts[0]}";
+            return;
+        }
+
+        db.ShiftAssignments.Add(new ShiftAssignment
+        {
+            CompanyId = companyId,
+            ShiftId = request.ShiftId,
+            EmployeeId = request.EmployeeId
+        });
+
+        request.Status = OpenShiftRequestStatus.Approved;
+        request.DecidedAt = DateTime.UtcNow;
+
+        if (request.Shift.Assignments.Count + 1 >= request.Shift.RequiredEmployees)
+        {
+            var others = await db.OpenShiftRequests
+                .Where(x => x.CompanyId == companyId &&
+                            x.ShiftId == request.ShiftId &&
+                            x.Status == OpenShiftRequestStatus.Pending &&
+                            x.Id != request.Id)
+                .ToListAsync();
+
+            foreach (var other in others)
+            {
+                other.Status = OpenShiftRequestStatus.Rejected;
+                other.DecidedAt = DateTime.UtcNow;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        _severity = Severity.Success;
+        _message = "Schichtübernahme wurde genehmigt.";
+        await LoadAsync();
     }
 
     private async Task Reject(int requestId)
     {
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
-        var request = await db.OpenShiftRequests.FirstOrDefaultAsync(x => x.Id == requestId && x.CompanyId == companyId);
-        if (request is null || request.Status != OpenShiftRequestStatus.Pending) return;
-        request.Status = OpenShiftRequestStatus.Rejected; request.DecidedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(); _severity = Severity.Info; _message = "Anfrage wurde abgelehnt."; await LoadAsync();
+
+        var request = await db.OpenShiftRequests
+            .FirstOrDefaultAsync(x => x.Id == requestId && x.CompanyId == companyId);
+
+        if (request is null || request.Status != OpenShiftRequestStatus.Pending)
+            return;
+
+        request.Status = OpenShiftRequestStatus.Rejected;
+        request.DecidedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        _severity = Severity.Info;
+        _message = "Anfrage wurde abgelehnt.";
+        await LoadAsync();
     }
 }
