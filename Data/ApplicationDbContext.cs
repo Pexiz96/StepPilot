@@ -23,6 +23,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ScheduleChange> ScheduleChanges => Set<ScheduleChange>();
     public DbSet<EmployeeShiftPreference> EmployeeShiftPreferences => Set<EmployeeShiftPreference>();
     public DbSet<OpenShiftRequest> OpenShiftRequests => Set<OpenShiftRequest>();
+    public DbSet<ShiftSwapRequest> ShiftSwapRequests => Set<ShiftSwapRequest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -69,5 +70,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<OpenShiftRequest>()
             .HasOne(x => x.Employee).WithMany()
             .HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<ShiftSwapRequest>()
+            .HasIndex(x => new { x.CompanyId, x.ShiftAssignmentId })
+            .IsUnique();
+        builder.Entity<ShiftSwapRequest>()
+            .HasOne(x => x.ShiftAssignment).WithMany()
+            .HasForeignKey(x => x.ShiftAssignmentId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<ShiftSwapRequest>()
+            .HasOne(x => x.FromEmployee).WithMany()
+            .HasForeignKey(x => x.FromEmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<ShiftSwapRequest>()
+            .HasOne(x => x.ToEmployee).WithMany()
+            .HasForeignKey(x => x.ToEmployeeId).OnDelete(DeleteBehavior.Restrict);
     }
 }
