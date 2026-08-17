@@ -3,43 +3,26 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0" />
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-
     <ResourcePreloader />
-
-    <link rel="stylesheet"
-          href="@Assets["app.css"]" />
-
-    <link rel="stylesheet"
-          href="@Assets["StepPilot.styles.css"]" />
-
-    <link href="_content/MudBlazor/MudBlazor.min.css"
-          rel="stylesheet" />
-
+    <link rel="icon" type="image/png" href="images/steppilot-logo.png" />
+    <link rel="apple-touch-icon" href="images/steppilot-logo.png" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["StepPilot.styles.css"]" />
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <ImportMap />
-
     <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
 <body>
-
     <Routes @rendermode="PageRenderMode" />
-
     <ReconnectModal />
-
     <script src="@Assets["_framework/blazor.web.js"]"></script>
-
-    <script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]"
-            type="module"></script>
-
+    <script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="js/download.js"></script>
-
 </body>
-
 </html>
 
 @code
@@ -48,7 +31,5 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     private IComponentRenderMode? PageRenderMode =>
-        HttpContext.AcceptsInteractiveRouting()
-            ? InteractiveServer
-            : null;
+        HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
 }
