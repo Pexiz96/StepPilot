@@ -34,6 +34,9 @@
                 <MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Verfügbarkeiten</MudNavLink>
                 <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Auswertungen</MudNavLink>
             </AuthorizeView>
+            <AuthorizeView Roles="@($"{AppRoles.Owner},{AppRoles.Admin}")">
+                <MudNavLink Href="/user-accounts" Icon="@Icons.Material.Filled.ManageAccounts">Benutzerkonten</MudNavLink>
+            </AuthorizeView>
             <AuthorizeView Roles="@AppRoles.Employee">
                 <MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Meine Verfügbarkeit</MudNavLink>
             </AuthorizeView>
