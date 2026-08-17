@@ -5,8 +5,8 @@
 
 <PageTitle>Dashboard | StepPilot</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-1">Dashboard</MudText>
-<MudText Color="Color.Secondary" Class="mb-6">Personalplanung auf einen Blick.</MudText>
+<MudText Typo="Typo.h4" Class="sp-page-title">Dashboard</MudText>
+<MudText Class="sp-page-subtitle">Personalplanung auf einen Blick.</MudText>
 
 @if (_loading)
 {
@@ -23,23 +23,58 @@ else if (!_hasCompany)
 else if (_stats is not null)
 {
     <MudGrid>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-5"><MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary"/><MudText Color="Color.Secondary">Aktive Mitarbeiter</MudText><MudText Typo="Typo.h4">@_stats.Employees</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-5"><MudIcon Icon="@Icons.Material.Filled.Today" Color="Color.Primary"/><MudText Color="Color.Secondary">Schichten heute</MudText><MudText Typo="Typo.h4">@_stats.TodayShifts</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-5"><MudIcon Icon="@Icons.Material.Filled.EventBusy" Color="Color.Warning"/><MudText Color="Color.Secondary">Heute abwesend</MudText><MudText Typo="Typo.h4">@_stats.Absent</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-5"><MudIcon Icon="@Icons.Material.Filled.PersonAddAlt" Color="@(_stats.OpenShifts > 0 ? Color.Error : Color.Success)"/><MudText Color="Color.Secondary">Offene Besetzungen · 7 Tage</MudText><MudText Typo="Typo.h4">@_stats.OpenShifts</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudPaper Class="sp-kpi-card sp-kpi-purple">
+                <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Large" />
+                <MudText Class="mt-3">Aktive Mitarbeiter</MudText>
+                <MudText Typo="Typo.h3">@_stats.Employees</MudText>
+                <MudText Typo="Typo.caption" Class="sp-page-subtitle">Mitarbeiter aktiv</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudPaper Class="sp-kpi-card sp-kpi-blue">
+                <MudIcon Icon="@Icons.Material.Filled.Today" Size="Size.Large" />
+                <MudText Class="mt-3">Schichten heute</MudText>
+                <MudText Typo="Typo.h3">@_stats.TodayShifts</MudText>
+                <MudText Typo="Typo.caption" Class="sp-page-subtitle">Für heute geplant</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudPaper Class="sp-kpi-card sp-kpi-orange">
+                <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" />
+                <MudText Class="mt-3">Heute abwesend</MudText>
+                <MudText Typo="Typo.h3">@_stats.Absent</MudText>
+                <MudText Typo="Typo.caption" Class="sp-page-subtitle">Mitarbeiter abwesend</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudPaper Class="sp-kpi-card sp-kpi-green">
+                <MudIcon Icon="@Icons.Material.Filled.PersonAddAlt" Size="Size.Large" />
+                <MudText Class="mt-3">Offene Besetzungen · 7 Tage</MudText>
+                <MudText Typo="Typo.h3">@_stats.OpenShifts</MudText>
+                <MudText Typo="Typo.caption" Class="sp-page-subtitle">Noch zu besetzen</MudText>
+            </MudPaper>
+        </MudItem>
     </MudGrid>
 
     <MudGrid Class="mt-4">
         <MudItem xs="12" md="8">
-            <MudPaper Class="pa-5">
-                <MudStack Row="true" AlignItems="AlignItems.Center"><div><MudText Typo="Typo.h6">Besetzungsgrad der nächsten 7 Tage</MudText><MudText Color="Color.Secondary">Wie viel des geplanten Personalbedarfs bereits abgedeckt ist.</MudText></div><MudSpacer/><MudText Typo="Typo.h4">@_stats.Coverage.ToString("0.#") %</MudText></MudStack>
-                <MudProgressLinear Value="@((double)_stats.Coverage)" Color="@(_stats.Coverage < 80 ? Color.Error : _stats.Coverage < 95 ? Color.Warning : Color.Success)" Rounded="true" Size="Size.Large" Class="mt-4" />
+            <MudPaper Class="sp-section-card">
+                <MudStack Row="true" AlignItems="AlignItems.Center">
+                    <div>
+                        <MudText Typo="Typo.h6">Besetzungsgrad der nächsten 7 Tage</MudText>
+                        <MudText Class="sp-page-subtitle">Wie viel des geplanten Personalbedarfs bereits abgedeckt ist.</MudText>
+                    </div>
+                    <MudSpacer />
+                    <MudText Typo="Typo.h3">@_stats.Coverage.ToString("0.#") %</MudText>
+                </MudStack>
+                <MudProgressLinear Value="@((double)_stats.Coverage)" Color="@(_stats.Coverage < 80 ? Color.Error : _stats.Coverage < 95 ? Color.Warning : Color.Success)" Rounded="true" Size="Size.Large" />
             </MudPaper>
         </MudItem>
         <MudItem xs="12" md="4">
-            <MudPaper Class="pa-5">
+            <MudPaper Class="sp-section-card">
                 <MudText Typo="Typo.h6">Handlungsbedarf</MudText>
-                <MudText Class="mt-3">Urlaubsanträge offen: <b>@_stats.PendingAbsences</b></MudText>
+                <MudText Class="mt-4">Urlaubsanträge offen: <b>@_stats.PendingAbsences</b></MudText>
                 <MudText>Veröffentlichte Pläne: <b>@_stats.PublishedWeeks</b></MudText>
                 @if (_stats.OpenShifts > 0)
                 {
