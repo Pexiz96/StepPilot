@@ -17,4 +17,10 @@
     <PackageReference Include="MudBlazor" Version="9.8.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="wwwroot\NewFolder1\" />
+    <Folder Include="wwwroot\NewFolder2\" />
+    <Folder Include="wwwroot\NewFolder\" />
+  </ItemGroup>
+
 </Project>

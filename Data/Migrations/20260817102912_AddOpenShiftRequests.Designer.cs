@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using StepPilot.Data;
 
@@ -11,9 +12,11 @@ using StepPilot.Data;
 namespace StepPilot.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817102912_AddOpenShiftRequests")]
+    partial class AddOpenShiftRequests
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -779,52 +782,6 @@ namespace StepPilot.Migrations
                     b.ToTable("ShiftAssignments");
                 });
 
-            modelBuilder.Entity("StepPilot.Models.ShiftSwapRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("ClaimedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DecidedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("FromEmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ShiftAssignmentId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("ToEmployeeId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("FromEmployeeId");
-
-                    b.HasIndex("ShiftAssignmentId");
-
-                    b.HasIndex("ToEmployeeId");
-
-                    b.HasIndex("CompanyId", "ShiftAssignmentId")
-                        .IsUnique();
-
-                    b.ToTable("ShiftSwapRequests");
-                });
-
             modelBuilder.Entity("StepPilot.Models.ShiftTemplate", b =>
                 {
                     b.Property<int>("Id")
@@ -1149,32 +1106,6 @@ namespace StepPilot.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("Shift");
-                });
-
-            modelBuilder.Entity("StepPilot.Models.ShiftSwapRequest", b =>
-                {
-                    b.HasOne("StepPilot.Models.Employee", "FromEmployee")
-                        .WithMany()
-                        .HasForeignKey("FromEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("StepPilot.Models.ShiftAssignment", "ShiftAssignment")
-                        .WithMany()
-                        .HasForeignKey("ShiftAssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("StepPilot.Models.Employee", "ToEmployee")
-                        .WithMany()
-                        .HasForeignKey("ToEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("FromEmployee");
-
-                    b.Navigation("ShiftAssignment");
-
-                    b.Navigation("ToEmployee");
                 });
 
             modelBuilder.Entity("StepPilot.Data.Company", b =>
