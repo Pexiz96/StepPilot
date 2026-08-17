@@ -35,7 +35,12 @@
                 <MudNavLink Href="/shift-templates" Icon="@Icons.Material.Filled.Schedule">Schichtvorlagen</MudNavLink>
                 <MudNavLink Href="/schedule" Icon="@Icons.Material.Filled.CalendarMonth">Schichtplanung</MudNavLink>
                 <MudNavLink Href="/absences" Icon="@Icons.Material.Filled.EventBusy">Abwesenheiten</MudNavLink>
+                <MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Verfügbarkeiten</MudNavLink>
                 <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Auswertungen</MudNavLink>
+            </AuthorizeView>
+
+            <AuthorizeView Roles="@AppRoles.Employee">
+                <MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Meine Verfügbarkeit</MudNavLink>
             </AuthorizeView>
 
             <AuthorizeView>
@@ -56,5 +61,4 @@
     private bool _isDarkMode = true;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
-    private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;
 }
