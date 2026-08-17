@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -53,8 +54,17 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.AddScoped<IAuthorizationHandler, ActiveUserAuthorizationHandler>();
 
-builder.Services.AddAuthorization();
+var activeUserPolicy = new AuthorizationPolicyBuilder()
+    .RequireAuthenticatedUser()
+    .AddRequirements(new ActiveUserRequirement())
+    .Build();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = activeUserPolicy;
+});
 
 builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddScoped<TenantGuard>();
