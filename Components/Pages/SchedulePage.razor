@@ -3,6 +3,7 @@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject TenantGuard TenantGuard
 @inject PlanningService PlanningService
+@inject NotificationService NotificationService
 
 <PageTitle>Schichtplanung | StepPilot</PageTitle>
 <MudText Typo="Typo.h4" Class="mb-2">Schichtplanung</MudText>
@@ -176,14 +177,29 @@
         }
 
         var companyId = await TenantGuard.RequireCompanyIdAsync();
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var schedule = await db.Schedules.FirstAsync(x => x.Id == _schedule.Id && x.CompanyId == companyId);
-        schedule.Status = ScheduleStatus.Published;
-        schedule.PublishedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        var employeeIds = _schedule.Shifts
+            .SelectMany(x => x.Assignments)
+            .Select(x => x.EmployeeId)
+            .Distinct()
+            .ToList();
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var schedule = await db.Schedules.FirstAsync(x => x.Id == _schedule.Id && x.CompanyId == companyId);
+            schedule.Status = ScheduleStatus.Published;
+            schedule.PublishedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        await NotificationService.CreateForEmployeesAsync(
+            companyId,
+            employeeIds,
+            "Neuer Dienstplan veröffentlicht",
+            $"Der Dienstplan für die Woche ab {_schedule.WeekStart:dd.MM.yyyy} wurde veröffentlicht. Bitte prüfe deine Schichten.");
+
         await LoadWeek();
         _messageSeverity = Severity.Success;
-        _message = "Dienstplan wurde erfolgreich geprüft und veröffentlicht.";
+        _message = "Dienstplan wurde erfolgreich geprüft und veröffentlicht. Zugewiesene Mitarbeiter wurden benachrichtigt.";
     }
 
     private sealed class NewShiftVm { public int TemplateId { get; set; } public DateTime? Date { get; set; } public int RequiredEmployees { get; set; } }
