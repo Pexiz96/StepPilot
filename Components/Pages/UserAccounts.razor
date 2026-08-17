@@ -1,0 +1,146 @@
+@page "/user-accounts"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+@inject UserManager<ApplicationUser> UserManager
+
+<PageTitle>Benutzerkonten | StepPilot</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Benutzerkonten</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Erstelle Mitarbeiterzugänge und verknüpfe sie direkt mit dem passenden Mitarbeiterprofil.</MudText>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+}
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-5 mb-5">
+        <MudText Typo="Typo.h6" Class="mb-4">Mitarbeiterzugang erstellen</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudSelect T="int" @bind-Value="_employeeId" Label="Mitarbeiter" Variant="Variant.Outlined">
+                    @foreach (var employee in _employees.Where(x => string.IsNullOrWhiteSpace(x.ApplicationUserId)))
+                    {
+                        <MudSelectItem T="int" Value="@employee.Id">@employee.FirstName @employee.LastName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="_email" Label="Login-E-Mail" Variant="Variant.Outlined" InputType="InputType.Email" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="_temporaryPassword" Label="Temporäres Passwort" Variant="Variant.Outlined" InputType="InputType.Password" /></MudItem>
+        </MudGrid>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">Das Passwort wird nicht in StepPilot gespeichert. Teile das temporäre Passwort dem Mitarbeiter über einen sicheren Weg mit.</MudAlert>
+        <MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="CreateAccount">Zugang erstellen</MudButton>
+    </MudPaper>
+
+    <MudTable Items="_employees" Hover="true" Striped="true">
+        <HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>E-Mail</MudTh><MudTh>Zugang</MudTh><MudTh>Status</MudTh></HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.FirstName @context.LastName</MudTd>
+            <MudTd>@(context.Email ?? "–")</MudTd>
+            <MudTd>@if (string.IsNullOrWhiteSpace(context.ApplicationUserId)) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Kein Konto</MudChip> } else { <MudChip T="string" Size="Size.Small" Color="Color.Success">Verknüpft</MudChip> }</MudTd>
+            <MudTd>@(context.IsActive ? "Aktiv" : "Inaktiv")</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<Employee> _employees = [];
+    private int _employeeId;
+    private string _email = string.Empty;
+    private string _temporaryPassword = string.Empty;
+    private string _message = string.Empty;
+    private Severity _severity = Severity.Info;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+        _loading = false;
+    }
+
+    private async Task Reload()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _employees = await db.Employees.AsNoTracking().Where(x => x.CompanyId == companyId).OrderBy(x => x.LastName).ThenBy(x => x.FirstName).ToListAsync();
+        var first = _employees.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.ApplicationUserId));
+        if (first is not null && _employeeId == 0)
+        {
+            _employeeId = first.Id;
+            _email = first.Email ?? string.Empty;
+        }
+    }
+
+    private async Task CreateAccount()
+    {
+        _message = string.Empty;
+        if (_employeeId == 0 || string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_temporaryPassword))
+        {
+            _severity = Severity.Warning;
+            _message = "Bitte Mitarbeiter, E-Mail-Adresse und temporäres Passwort angeben.";
+            return;
+        }
+
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var employee = await db.Employees.FirstOrDefaultAsync(x => x.Id == _employeeId && x.CompanyId == companyId);
+        if (employee is null || !string.IsNullOrWhiteSpace(employee.ApplicationUserId))
+        {
+            _severity = Severity.Error;
+            _message = "Der Mitarbeiter wurde nicht gefunden oder besitzt bereits einen Zugang.";
+            return;
+        }
+
+        if (await UserManager.FindByEmailAsync(_email.Trim()) is not null)
+        {
+            _severity = Severity.Error;
+            _message = "Für diese E-Mail-Adresse existiert bereits ein Benutzerkonto.";
+            return;
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = _email.Trim(),
+            Email = _email.Trim(),
+            EmailConfirmed = true,
+            FirstName = employee.FirstName,
+            LastName = employee.LastName,
+            CompanyId = companyId,
+            IsActive = true
+        };
+
+        var createResult = await UserManager.CreateAsync(user, _temporaryPassword);
+        if (!createResult.Succeeded)
+        {
+            _severity = Severity.Error;
+            _message = string.Join(" ", createResult.Errors.Select(x => x.Description));
+            return;
+        }
+
+        var roleResult = await UserManager.AddToRoleAsync(user, AppRoles.Employee);
+        if (!roleResult.Succeeded)
+        {
+            await UserManager.DeleteAsync(user);
+            _severity = Severity.Error;
+            _message = "Das Benutzerkonto konnte keiner Mitarbeiterrolle zugeordnet werden.";
+            return;
+        }
+
+        employee.ApplicationUserId = user.Id;
+        employee.Email = _email.Trim();
+        await db.SaveChangesAsync();
+
+        _severity = Severity.Success;
+        _message = $"Zugang für {employee.FirstName} {employee.LastName} wurde erstellt und mit dem Mitarbeiterprofil verknüpft.";
+        _temporaryPassword = string.Empty;
+        _employeeId = 0;
+        _email = string.Empty;
+        await Reload();
+    }
+}
