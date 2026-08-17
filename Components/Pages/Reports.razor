@@ -2,17 +2,24 @@
 @attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject TenantGuard TenantGuard
+@inject IJSRuntime JS
 
 <PageTitle>Auswertungen | StepPilot</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-2">Auswertungen</MudText>
-<MudText Color="Color.Secondary" Class="mb-5">Arbeitszeit, Auslastung und Besetzungsgrad für einen frei wählbaren Zeitraum.</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-5">
+    <div>
+        <MudText Typo="Typo.h4">Auswertungen</MudText>
+        <MudText Color="Color.Secondary">Arbeitszeit, Auslastung und Besetzungsgrad für einen frei wählbaren Zeitraum.</MudText>
+    </div>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" Disabled="@(_rows.Count == 0)" OnClick="ExportCsv">CSV exportieren</MudButton>
+</MudStack>
 
 <MudPaper Class="pa-4 mb-5" Elevation="1">
     <MudGrid>
         <MudItem xs="12" md="4"><MudDatePicker Label="Von" @bind-Date="_from" Variant="Variant.Outlined" /></MudItem>
         <MudItem xs="12" md="4"><MudDatePicker Label="Bis" @bind-Date="_to" Variant="Variant.Outlined" /></MudItem>
-        <MudItem xs="12" md="4" Class="d-flex align-center"><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Load">Auswertung aktualisieren</MudButton></MudItem>
+        <MudItem xs="12" md="4" Class="d-flex align-center"><MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="Load">Auswertung aktualisieren</MudButton></MudItem>
     </MudGrid>
 </MudPaper>
 
@@ -23,27 +30,49 @@
 else
 {
     <MudGrid Class="mb-5">
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Geplante Stunden</MudText><MudText Typo="Typo.h4">@_plannedTotal.ToString("0.##")</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Sollstunden</MudText><MudText Typo="Typo.h4">@_targetTotal.ToString("0.##")</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Offene Besetzungen</MudText><MudText Typo="Typo.h4">@_openAssignments</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Besetzungsgrad</MudText><MudText Typo="Typo.h4">@_coverage.ToString("0.#") %</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="sp-kpi-card sp-kpi-purple"><MudText Color="Color.Secondary">Geplante Stunden</MudText><MudText Typo="Typo.h4">@_plannedTotal.ToString("0.##") h</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="sp-kpi-card sp-kpi-blue"><MudText Color="Color.Secondary">Sollstunden</MudText><MudText Typo="Typo.h4">@_targetTotal.ToString("0.##") h</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="sp-kpi-card sp-kpi-orange"><MudText Color="Color.Secondary">Offene Besetzungen</MudText><MudText Typo="Typo.h4">@_openAssignments</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="sp-kpi-card sp-kpi-green"><MudText Color="Color.Secondary">Besetzungsgrad</MudText><MudText Typo="Typo.h4">@_coverage.ToString("0.#") %</MudText></MudPaper></MudItem>
     </MudGrid>
 
-    <MudTable Items="_rows" Hover="true" Striped="true">
-        <HeaderContent>
-            <MudTh>Mitarbeiter</MudTh><MudTh>Sollstunden</MudTh><MudTh>Geplant</MudTh><MudTh>Differenz</MudTh><MudTh>Auslastung</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd>@context.Name</MudTd>
-            <MudTd>@context.Target.ToString("0.##") h</MudTd>
-            <MudTd>@context.Planned.ToString("0.##") h</MudTd>
-            <MudTd>@Signed(context.Difference) h</MudTd>
-            <MudTd>
-                <MudProgressLinear Value="@((double)context.Utilization)" Color="@(context.Utilization > 105 ? Color.Error : context.Utilization > 95 ? Color.Warning : Color.Primary)" Rounded="true" />
-                <MudText Typo="Typo.caption">@context.Utilization.ToString("0.#") %</MudText>
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+    <MudGrid Class="mb-5">
+        <MudItem xs="12" md="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Über Soll</MudText><MudText Typo="Typo.h5">@OverTargetCount Mitarbeiter</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">Mehr als 105 % der Sollstunden</MudText></MudPaper></MudItem>
+        <MudItem xs="12" md="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Unter Soll</MudText><MudText Typo="Typo.h5">@UnderTargetCount Mitarbeiter</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">Weniger als 80 % der Sollstunden</MudText></MudPaper></MudItem>
+        <MudItem xs="12" md="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Planungsdifferenz</MudText><MudText Typo="Typo.h5">@Signed(_plannedTotal - _targetTotal) h</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">Geplant minus Soll</MudText></MudPaper></MudItem>
+    </MudGrid>
+
+    @if (_openAssignments > 0 || OverTargetCount > 0 || UnderTargetCount > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-5">
+            Die Auswertung zeigt Planungsbedarf: @_openAssignments offene Besetzung(en), @OverTargetCount Mitarbeiter über Soll und @UnderTargetCount Mitarbeiter deutlich unter Soll.
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-5">Für den ausgewählten Zeitraum sind keine auffälligen Auslastungswerte vorhanden.</MudAlert>
+    }
+
+    <MudPaper Class="pa-4 mb-5">
+        <MudText Typo="Typo.h6" Class="mb-3">Mitarbeiterauslastung</MudText>
+        <MudTable Items="_rows.OrderByDescending(x => AttentionScore(x))" Hover="true" Striped="true">
+            <HeaderContent>
+                <MudTh>Mitarbeiter</MudTh><MudTh>Sollstunden</MudTh><MudTh>Geplant</MudTh><MudTh>Differenz</MudTh><MudTh>Auslastung</MudTh><MudTh>Bewertung</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>@context.Target.ToString("0.##") h</MudTd>
+                <MudTd>@context.Planned.ToString("0.##") h</MudTd>
+                <MudTd>@Signed(context.Difference) h</MudTd>
+                <MudTd>
+                    <MudProgressLinear Value="@((double)Math.Min(context.Utilization, 120m))" Color="@UtilizationColor(context.Utilization)" Rounded="true" />
+                    <MudText Typo="Typo.caption">@context.Utilization.ToString("0.#") %</MudText>
+                </MudTd>
+                <MudTd><MudChip T="string" Size="Size.Small" Color="@UtilizationColor(context.Utilization)" Variant="Variant.Outlined">@UtilizationText(context.Utilization)</MudChip></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4" Color="Color.Secondary">Für den Zeitraum liegen keine Mitarbeiterdaten vor.</MudText></NoRecordsContent>
+        </MudTable>
+    </MudPaper>
 }
 
 @code {
@@ -55,6 +84,9 @@ else
     private decimal _targetTotal;
     private int _openAssignments;
     private decimal _coverage;
+
+    private int OverTargetCount => _rows.Count(x => x.Target > 0 && x.Utilization > 105m);
+    private int UnderTargetCount => _rows.Count(x => x.Target > 0 && x.Utilization < 80m);
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -107,6 +139,18 @@ else
         finally { _loading = false; }
     }
 
+    private async Task ExportCsv()
+    {
+        if (_rows.Count == 0 || _from is null || _to is null) return;
+        var lines = new List<string> { "Mitarbeiter;Sollstunden;Geplant;Differenz;Auslastung" };
+        lines.AddRange(_rows.Select(x => $"{Csv(x.Name)};{x.Target:0.##};{x.Planned:0.##};{x.Difference:0.##};{x.Utilization:0.#}%"));
+        var content = "\uFEFF" + string.Join(Environment.NewLine, lines);
+        var fileName = $"StepPilot_Auswertung_{_from.Value:yyyyMMdd}_{_to.Value:yyyyMMdd}.csv";
+        await JS.InvokeVoidAsync("stepPilotDownload", fileName, "text/csv;charset=utf-8", content);
+    }
+
+    private static string Csv(string value) => value.Contains(';') || value.Contains('"') ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
+
     private static DateTime StartOfCurrentWeek()
     {
         var today = DateTime.Today;
@@ -122,6 +166,9 @@ else
         return Math.Max(0, minutes / 60m);
     }
 
+    private static int AttentionScore(Row row) => row.Utilization > 105m ? 3 : row.Utilization < 80m ? 2 : 1;
+    private static Color UtilizationColor(decimal value) => value > 105m ? Color.Error : value < 80m ? Color.Warning : value > 95m ? Color.Success : Color.Primary;
+    private static string UtilizationText(decimal value) => value > 105m ? "Überlastet" : value < 80m ? "Unterplant" : value > 95m ? "Im Soll" : "Ausbaufähig";
     private static string Signed(decimal value) => value > 0 ? $"+{value:0.##}" : value.ToString("0.##");
     private sealed record Row(string Name, decimal Target, decimal Planned, decimal Difference, decimal Utilization);
 }
