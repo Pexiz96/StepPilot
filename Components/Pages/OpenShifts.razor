@@ -4,6 +4,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject PlanningService PlanningService
+@inject NotificationService NotificationService
 
 <PageTitle>Offene Schichten | StepPilot</PageTitle>
 
@@ -54,6 +55,7 @@ else
     private bool _hasEmployeeProfile;
     private int _companyId;
     private int _employeeId;
+    private string _employeeName = string.Empty;
     private List<Shift> _shifts = [];
     private Dictionary<int, OpenShiftRequestStatus> _requestByShift = [];
     private string _message = string.Empty;
@@ -71,9 +73,10 @@ else
             if (user?.CompanyId is null) return;
             _companyId = user.CompanyId.Value;
             await using var db = await DbFactory.CreateDbContextAsync();
-            var employeeId = await db.Employees.Where(x => x.CompanyId == _companyId && x.ApplicationUserId == user.Id && x.IsActive).Select(x => (int?)x.Id).FirstOrDefaultAsync();
-            if (employeeId is null) return;
-            _employeeId = employeeId.Value;
+            var employee = await db.Employees.AsNoTracking().FirstOrDefaultAsync(x => x.CompanyId == _companyId && x.ApplicationUserId == user.Id && x.IsActive);
+            if (employee is null) return;
+            _employeeId = employee.Id;
+            _employeeName = $"{employee.FirstName} {employee.LastName}".Trim();
             _hasEmployeeProfile = true;
             var today = DateOnly.FromDateTime(DateTime.Today);
             _shifts = await db.Shifts.AsNoTracking().Include(x => x.Schedule).Include(x => x.Location).Include(x => x.Assignments)
@@ -90,11 +93,24 @@ else
     {
         var conflicts = await PlanningService.ValidateAssignmentAsync(_employeeId, shiftId);
         if (conflicts.Count > 0) { _severity = Severity.Error; _message = $"Übernahme nicht möglich: {conflicts[0]}"; return; }
+
         await using var db = await DbFactory.CreateDbContextAsync();
         if (await db.OpenShiftRequests.AnyAsync(x => x.CompanyId == _companyId && x.ShiftId == shiftId && x.EmployeeId == _employeeId)) return;
+
+        var shift = await db.Shifts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == shiftId && x.CompanyId == _companyId);
+        if (shift is null) return;
+
         db.OpenShiftRequests.Add(new OpenShiftRequest { CompanyId = _companyId, ShiftId = shiftId, EmployeeId = _employeeId });
         await db.SaveChangesAsync();
-        _severity = Severity.Success; _message = "Deine Anfrage wurde an die Planung gesendet.";
+
+        await NotificationService.CreateForRolesAsync(
+            _companyId,
+            new[] { AppRoles.Owner, AppRoles.Admin, AppRoles.Planner },
+            "Neue Schichtanfrage",
+            $"{_employeeName} möchte die offene Schicht am {shift.Date:dd.MM.yyyy} um {shift.StartTime:HH:mm} übernehmen.");
+
+        _severity = Severity.Success;
+        _message = "Deine Anfrage wurde an die Planung gesendet.";
         await LoadAsync();
     }
 }
