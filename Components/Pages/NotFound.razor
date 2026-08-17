@@ -1,5 +1,17 @@
-﻿@page "/not-found"
+@page "/not-found"
 @layout MainLayout
 
-<h3>Not Found</h3>
-<p>Sorry, the content you are looking for does not exist.</p>
+<PageTitle>Seite nicht gefunden | StepPilot</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-12">
+    <MudPaper Class="pa-8 text-center" Elevation="1">
+        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Primary" Class="mb-4" />
+        <MudText Typo="Typo.h4" Class="mb-2">Seite nicht gefunden</MudText>
+        <MudText Color="Color.Secondary" Class="mb-6">
+            Die aufgerufene Seite existiert nicht oder ist nicht mehr verfügbar.
+        </MudText>
+        <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Dashboard">
+            Zurück zum Dashboard
+        </MudButton>
+    </MudPaper>
+</MudContainer>
