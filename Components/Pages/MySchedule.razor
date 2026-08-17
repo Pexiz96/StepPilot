@@ -5,42 +5,91 @@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Meine Schichten | StepPilot</PageTitle>
-<MudText Typo="Typo.h4" Class="mb-4">Meine Schichten</MudText>
 
-<MudTable Items="_items">
-    <HeaderContent><MudTh>Datum</MudTh><MudTh>Von</MudTh><MudTh>Bis</MudTh><MudTh>Standort</MudTh></HeaderContent>
-    <RowTemplate>
-        <MudTd>@context.Shift?.Date.ToString("dd.MM.yyyy")</MudTd>
-        <MudTd>@context.Shift?.StartTime.ToString("HH:mm")</MudTd>
-        <MudTd>@context.Shift?.EndTime.ToString("HH:mm")</MudTd>
-        <MudTd>@context.Shift?.Location?.Name</MudTd>
-    </RowTemplate>
-</MudTable>
+<MudText Typo="Typo.h4" Class="mb-2">Meine Schichten</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Dein persönlicher Dienstplan mit den nächsten Einsätzen und geplanten Arbeitsstunden.</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!_hasEmployeeProfile)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Deinem Benutzerkonto ist noch kein Mitarbeiterprofil zugeordnet.</MudAlert>
+}
+else
+{
+    <MudGrid Class="mb-5">
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Nächste Schicht</MudText><MudText Typo="Typo.h6">@NextShiftText</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Kommende Schichten</MudText><MudText Typo="Typo.h4">@UpcomingCount</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Geplante Stunden · 7 Tage</MudText><MudText Typo="Typo.h4">@NextSevenDaysHours.ToString("0.##") h</MudText></MudPaper></MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-4 mb-5">
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <div><MudText Typo="Typo.h6">Self-Service</MudText><MudText Color="Color.Secondary">Halte deine Angaben aktuell, damit die automatische Planung korrekt arbeiten kann.</MudText></div>
+            <MudSpacer />
+            <MudButton Href="/availability" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AccessTime">Verfügbarkeit</MudButton>
+            <MudButton Href="/absences" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.EventBusy">Urlaub / Abwesenheit</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudTable Items="_items" Hover="true" Striped="true">
+        <HeaderContent><MudTh>Datum</MudTh><MudTh>Von</MudTh><MudTh>Bis</MudTh><MudTh>Dauer</MudTh><MudTh>Standort</MudTh><MudTh>Status</MudTh></HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Shift?.Date.ToString("dd.MM.yyyy")</MudTd>
+            <MudTd>@context.Shift?.StartTime.ToString("HH:mm")</MudTd>
+            <MudTd>@context.Shift?.EndTime.ToString("HH:mm")</MudTd>
+            <MudTd>@(context.Shift is null ? "–" : $"{Hours(context.Shift):0.##} h")</MudTd>
+            <MudTd>@(context.Shift?.Location?.Name ?? "–")</MudTd>
+            <MudTd>@if (context.Shift?.Schedule?.Status == ScheduleStatus.Published) { <MudChip T="string" Size="Size.Small" Color="Color.Success">Veröffentlicht</MudChip> } else { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">In Planung</MudChip> }</MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText Class="pa-4" Color="Color.Secondary">Aktuell sind keine Schichten für dich geplant.</MudText></NoRecordsContent>
+    </MudTable>
+}
 
 @code {
     private List<ShiftAssignment> _items = [];
+    private bool _loading = true;
+    private bool _hasEmployeeProfile;
+
+    private int UpcomingCount => _items.Count(x => x.Shift is not null && x.Shift.Date >= DateOnly.FromDateTime(DateTime.Today));
+    private decimal NextSevenDaysHours => _items.Where(x => x.Shift is not null && x.Shift.Date >= DateOnly.FromDateTime(DateTime.Today) && x.Shift.Date <= DateOnly.FromDateTime(DateTime.Today.AddDays(6))).Sum(x => Hours(x.Shift!));
+    private string NextShiftText
+    {
+        get
+        {
+            var shift = _items.Where(x => x.Shift is not null && x.Shift.Date >= DateOnly.FromDateTime(DateTime.Today)).Select(x => x.Shift!).OrderBy(x => x.Date).ThenBy(x => x.StartTime).FirstOrDefault();
+            return shift is null ? "Keine geplant" : $"{shift.Date:dd.MM.} · {shift.StartTime:HH:mm}";
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var user = await UserManager.GetUserAsync(auth.User);
-        if (user is null || user.CompanyId is null) return;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(auth.User);
+            if (user is null || user.CompanyId is null) return;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var employeeId = await db.Employees.Where(x => x.CompanyId == user.CompanyId && x.ApplicationUserId == user.Id).Select(x => (int?)x.Id).FirstOrDefaultAsync();
+            if (employeeId is null) return;
+            _hasEmployeeProfile = true;
+            _items = await db.ShiftAssignments.AsNoTracking()
+                .Include(x => x.Shift).ThenInclude(x => x!.Location)
+                .Include(x => x.Shift).ThenInclude(x => x!.Schedule)
+                .Where(x => x.CompanyId == user.CompanyId && x.EmployeeId == employeeId)
+                .OrderBy(x => x.Shift!.Date).ThenBy(x => x.Shift!.StartTime)
+                .ToListAsync();
+        }
+        finally { _loading = false; }
+    }
 
-        await using var db = await DbFactory.CreateDbContextAsync();
-
-        var employeeId = await db.Employees
-            .Where(x => x.CompanyId == user.CompanyId && x.ApplicationUserId == user.Id)
-            .Select(x => (int?)x.Id)
-            .FirstOrDefaultAsync();
-
-        if (employeeId is null) return;
-
-        _items = await db.ShiftAssignments.AsNoTracking()
-            .Include(x => x.Shift)
-            .ThenInclude(x => x!.Location)
-            .Where(x => x.CompanyId == user.CompanyId && x.EmployeeId == employeeId)
-            .OrderBy(x => x.Shift!.Date)
-            .ThenBy(x => x.Shift!.StartTime)
-            .ToListAsync();
+    private static decimal Hours(Shift shift)
+    {
+        var minutes = (decimal)(shift.EndTime.ToTimeSpan() - shift.StartTime.ToTimeSpan()).TotalMinutes;
+        if (minutes <= 0) minutes += 24 * 60;
+        minutes -= shift.BreakMinutes;
+        return Math.Max(0m, minutes / 60m);
     }
 }
