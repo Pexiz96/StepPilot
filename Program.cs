@@ -62,6 +62,7 @@ builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<PlanningService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<DemoDataService>();
+builder.Services.AddScoped<NotificationService>();
 
 var app = builder.Build();
 
