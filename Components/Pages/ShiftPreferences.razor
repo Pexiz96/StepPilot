@@ -1,0 +1,103 @@
+@page "/shift-preferences"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+
+<PageTitle>Schichtpräferenzen | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-2">Schichtpräferenzen</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Lege fest, welche Schichtarten ein Mitarbeiter arbeiten darf. Die automatische Planung berücksichtigt diese Regeln.</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-5 mb-5">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudSelect T="int" @bind-Value="_employeeId" Label="Mitarbeiter" Variant="Variant.Outlined" Class="flex-grow-1">
+                @foreach (var employee in _employees)
+                {
+                    <MudSelectItem T="int" Value="@employee.Id">@employee.FirstName @employee.LastName</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Outlined" OnClick="LoadPreferences">Laden</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @if (_employeeId != 0)
+    {
+        <MudPaper Class="pa-5">
+            @if (_templates.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info">Es sind noch keine aktiven Schichtvorlagen vorhanden.</MudAlert>
+            }
+            else
+            {
+                <MudTable Items="_templates" Hover="true">
+                    <HeaderContent><MudTh>Schichtart</MudTh><MudTh>Zeit</MudTh><MudTh>Darf eingeplant werden</MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Name</MudTd>
+                        <MudTd>@context.StartTime.ToString("HH:mm")–@context.EndTime.ToString("HH:mm")</MudTd>
+                        <MudTd><MudSwitch T="bool" Value="@IsAllowed(context.Id)" ValueChanged="@(v => SetAllowed(context.Id, v))" Color="Color.Primary" /></MudTd>
+                    </RowTemplate>
+                </MudTable>
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">Wenn für einen Mitarbeiter Regeln gespeichert sind, plant StepPilot ihn nur in ausdrücklich erlaubte Schichtarten ein.</MudAlert>
+                <MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save">Präferenzen speichern</MudButton>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private List<Employee> _employees = [];
+    private List<ShiftTemplate> _templates = [];
+    private readonly Dictionary<int, bool> _allowed = [];
+    private int _employeeId;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _employees = await db.Employees.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).OrderBy(x => x.LastName).ThenBy(x => x.FirstName).ToListAsync();
+        _templates = await db.ShiftTemplates.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).OrderBy(x => x.Name).ToListAsync();
+        _employeeId = _employees.FirstOrDefault()?.Id ?? 0;
+        if (_employeeId != 0) await LoadPreferences();
+        _loading = false;
+    }
+
+    private async Task LoadPreferences()
+    {
+        _allowed.Clear();
+        if (_employeeId == 0) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var preferences = await db.EmployeeShiftPreferences.AsNoTracking().Where(x => x.EmployeeId == _employeeId).ToListAsync();
+        foreach (var template in _templates)
+            _allowed[template.Id] = preferences.Count == 0 || preferences.Any(x => x.ShiftTemplateId == template.Id && x.IsAllowed);
+    }
+
+    private bool IsAllowed(int templateId) => !_allowed.TryGetValue(templateId, out var value) || value;
+    private void SetAllowed(int templateId, bool value) => _allowed[templateId] = value;
+
+    private async Task Save()
+    {
+        if (_employeeId == 0) return;
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (!await db.Employees.AnyAsync(x => x.Id == _employeeId && x.CompanyId == companyId)) return;
+
+        var old = await db.EmployeeShiftPreferences.Where(x => x.EmployeeId == _employeeId).ToListAsync();
+        db.EmployeeShiftPreferences.RemoveRange(old);
+        foreach (var template in _templates)
+        {
+            db.EmployeeShiftPreferences.Add(new EmployeeShiftPreference
+            {
+                EmployeeId = _employeeId,
+                ShiftTemplateId = template.Id,
+                IsAllowed = IsAllowed(template.Id)
+            });
+        }
+        await db.SaveChangesAsync();
+    }
+}
