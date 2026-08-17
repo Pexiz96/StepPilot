@@ -91,9 +91,11 @@ public sealed class PlanningService
 
         if (shift.ShiftTemplateId is int shiftTemplateId)
         {
+            // EmployeeShiftPreference besitzt keine eigene CompanyId.
+            // Die Mandantentrennung erfolgt sicher über den bereits auf CompanyId geprüften Employee.
             var shiftPreferences = await db.EmployeeShiftPreferences
                 .AsNoTracking()
-                .Where(x => x.EmployeeId == employeeId && x.CompanyId == companyId)
+                .Where(x => x.EmployeeId == employeeId)
                 .ToListAsync();
 
             if (shiftPreferences.Count > 0 &&
