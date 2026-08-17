@@ -5,105 +5,14 @@
 @inject PlanningService PlanningService
 
 <PageTitle>Tauschanfragen | StepPilot</PageTitle>
-<MudText Typo="Typo.h4" Class="mb-2">Tauschanfragen</MudText>
-<MudText Color="Color.Secondary" Class="mb-5">Prüfe und genehmige Schichttausche zwischen Mitarbeitern.</MudText>
-
-@if (!string.IsNullOrWhiteSpace(_message))
-{
-    <MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
-}
-
-<MudTable Items="_requests" Hover="true" Striped="true">
-    <HeaderContent><MudTh>Von</MudTh><MudTh>An</MudTh><MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Status</MudTh><MudTh>Aktionen</MudTh></HeaderContent>
-    <RowTemplate>
-        <MudTd>@EmployeeName(context.FromEmployee)</MudTd>
-        <MudTd>@EmployeeName(context.ToEmployee)</MudTd>
-        <MudTd>@context.ShiftAssignment?.Shift?.Date.ToString("dd.MM.yyyy")</MudTd>
-        <MudTd>@context.ShiftAssignment?.Shift?.StartTime.ToString("HH:mm")–@context.ShiftAssignment?.Shift?.EndTime.ToString("HH:mm")</MudTd>
-        <MudTd>@StatusText(context.Status)</MudTd>
-        <MudTd>
-            @if (context.Status == ShiftSwapRequestStatus.Claimed)
-            {
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => Approve(context.Id))">Genehmigen</MudButton>
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Class="ml-2" OnClick="@(() => Reject(context.Id))">Ablehnen</MudButton>
-            }
-        </MudTd>
-    </RowTemplate>
-    <NoRecordsContent><MudText Class="pa-4" Color="Color.Secondary">Keine Tauschanfragen vorhanden.</MudText></NoRecordsContent>
-</MudTable>
-
-@code {
-    private List<ShiftSwapRequest> _requests = [];
-    private string _message = string.Empty;
-    private Severity _severity = Severity.Info;
-
-    protected override async Task OnInitializedAsync() => await LoadAsync();
-
-    private async Task LoadAsync()
-    {
-        var companyId = await TenantGuard.RequireCompanyIdAsync();
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _requests = await db.ShiftSwapRequests.AsNoTracking()
-            .Include(x => x.FromEmployee)
-            .Include(x => x.ToEmployee)
-            .Include(x => x.ShiftAssignment).ThenInclude(x => x!.Shift)
-            .Where(x => x.CompanyId == companyId)
-            .OrderBy(x => x.Status)
-            .ThenByDescending(x => x.CreatedAt)
-            .ToListAsync();
-    }
-
-    private async Task Approve(int id)
-    {
-        var companyId = await TenantGuard.RequireCompanyIdAsync();
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var request = await db.ShiftSwapRequests
-            .Include(x => x.ShiftAssignment).ThenInclude(x => x!.Shift)
-            .FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == companyId);
-
-        if (request?.ShiftAssignment?.Shift is null || request.ToEmployeeId is null || request.Status != ShiftSwapRequestStatus.Claimed)
-            return;
-
-        var conflicts = await PlanningService.ValidateAssignmentAsync(request.ToEmployeeId.Value, request.ShiftAssignment.ShiftId);
-        if (conflicts.Count > 0)
-        {
-            _severity = Severity.Error;
-            _message = $"Tausch kann nicht genehmigt werden: {conflicts[0]}";
-            return;
-        }
-
-        request.ShiftAssignment.EmployeeId = request.ToEmployeeId.Value;
-        request.Status = ShiftSwapRequestStatus.Approved;
-        request.DecidedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
-
-        _severity = Severity.Success;
-        _message = "Schichttausch wurde genehmigt.";
-        await LoadAsync();
-    }
-
-    private async Task Reject(int id)
-    {
-        var companyId = await TenantGuard.RequireCompanyIdAsync();
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var request = await db.ShiftSwapRequests.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == companyId);
-        if (request is null || request.Status != ShiftSwapRequestStatus.Claimed) return;
-        request.Status = ShiftSwapRequestStatus.Rejected;
-        request.DecidedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
-        _severity = Severity.Info;
-        _message = "Tauschanfrage wurde abgelehnt.";
-        await LoadAsync();
-    }
-
-    private static string EmployeeName(Employee? employee) => employee is null ? "–" : $"{employee.FirstName} {employee.LastName}".Trim();
-    private static string StatusText(ShiftSwapRequestStatus status) => status switch
-    {
-        ShiftSwapRequestStatus.Open => "Offen",
-        ShiftSwapRequestStatus.Claimed => "Angefragt",
-        ShiftSwapRequestStatus.Approved => "Genehmigt",
-        ShiftSwapRequestStatus.Rejected => "Abgelehnt",
-        ShiftSwapRequestStatus.Cancelled => "Abgebrochen",
-        _ => status.ToString()
-    };
-}
+<MudText Typo="Typo.h4" Class="mb-2">Tauschanfragen</MudText><MudText Color="Color.Secondary" Class="mb-5">Prüfe und genehmige Schichttausche zwischen Mitarbeitern.</MudText>
+@if(!string.IsNullOrWhiteSpace(_message)){<MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>}
+<MudTable Items="_requests" Hover="true" Striped="true"><HeaderContent><MudTh>Von</MudTh><MudTh>An</MudTh><MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Status</MudTh><MudTh>Aktionen</MudTh></HeaderContent><RowTemplate><MudTd>@EmployeeName(context.FromEmployee)</MudTd><MudTd>@EmployeeName(context.ToEmployee)</MudTd><MudTd>@context.ShiftAssignment?.Shift?.Date.ToString("dd.MM.yyyy")</MudTd><MudTd>@context.ShiftAssignment?.Shift?.StartTime.ToString("HH:mm")–@context.ShiftAssignment?.Shift?.EndTime.ToString("HH:mm")</MudTd><MudTd>@StatusText(context.Status)</MudTd><MudTd>@if(context.Status==ShiftSwapRequestStatus.Claimed){<MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="@(()=>Approve(context.Id))">Genehmigen</MudButton><MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Class="ml-2" OnClick="@(()=>Reject(context.Id))">Ablehnen</MudButton>}</MudTd></RowTemplate><NoRecordsContent><MudText Class="pa-4" Color="Color.Secondary">Keine Tauschanfragen vorhanden.</MudText></NoRecordsContent></MudTable>
+@code{
+private List<ShiftSwapRequest> _requests=[];private string _message=string.Empty;private Severity _severity=Severity.Info;
+protected override async Task OnInitializedAsync()=>await LoadAsync();
+private async Task LoadAsync(){var c=await TenantGuard.RequireCompanyIdAsync();await using var db=await DbFactory.CreateDbContextAsync();_requests=await db.ShiftSwapRequests.AsNoTracking().Include(x=>x.FromEmployee).Include(x=>x.ToEmployee).Include(x=>x.ShiftAssignment).ThenInclude(x=>x!.Shift).Where(x=>x.CompanyId==c).OrderBy(x=>x.Status).ThenByDescending(x=>x.CreatedAt).ToListAsync();}
+private async Task Approve(int id){var c=await TenantGuard.RequireCompanyIdAsync();await using var db=await DbFactory.CreateDbContextAsync();var r=await db.ShiftSwapRequests.Include(x=>x.FromEmployee).Include(x=>x.ToEmployee).Include(x=>x.ShiftAssignment).ThenInclude(x=>x!.Shift).FirstOrDefaultAsync(x=>x.Id==id&&x.CompanyId==c);if(r?.ShiftAssignment?.Shift is null||r.ToEmployeeId is null||r.Status!=ShiftSwapRequestStatus.Claimed)return;var conflicts=await PlanningService.ValidateAssignmentAsync(r.ToEmployeeId.Value,r.ShiftAssignment.ShiftId);if(conflicts.Count>0){_severity=Severity.Error;_message=$"Tausch kann nicht genehmigt werden: {conflicts[0]}";return;}r.ShiftAssignment.EmployeeId=r.ToEmployeeId.Value;r.Status=ShiftSwapRequestStatus.Approved;r.DecidedAt=DateTime.UtcNow;var d=r.ShiftAssignment.Shift.Date;Notify(db,r.FromEmployee,c,"Schichttausch genehmigt",$"Deine Schicht am {d:dd.MM.yyyy} wurde erfolgreich übertragen.");Notify(db,r.ToEmployee,c,"Schicht übernommen",$"Der Schichttausch am {d:dd.MM.yyyy} wurde genehmigt. Die Schicht ist jetzt dir zugeordnet.");await db.SaveChangesAsync();_severity=Severity.Success;_message="Schichttausch wurde genehmigt.";await LoadAsync();}
+private async Task Reject(int id){var c=await TenantGuard.RequireCompanyIdAsync();await using var db=await DbFactory.CreateDbContextAsync();var r=await db.ShiftSwapRequests.Include(x=>x.FromEmployee).Include(x=>x.ToEmployee).Include(x=>x.ShiftAssignment).ThenInclude(x=>x!.Shift).FirstOrDefaultAsync(x=>x.Id==id&&x.CompanyId==c);if(r is null||r.Status!=ShiftSwapRequestStatus.Claimed)return;r.Status=ShiftSwapRequestStatus.Rejected;r.DecidedAt=DateTime.UtcNow;var msg=r.ShiftAssignment?.Shift is null?"Die Tauschanfrage wurde abgelehnt.":$"Der Schichttausch für den {r.ShiftAssignment.Shift.Date:dd.MM.yyyy} wurde abgelehnt.";Notify(db,r.FromEmployee,c,"Schichttausch abgelehnt",msg);Notify(db,r.ToEmployee,c,"Schichttausch abgelehnt",msg);await db.SaveChangesAsync();_severity=Severity.Info;_message="Tauschanfrage wurde abgelehnt.";await LoadAsync();}
+private static void Notify(ApplicationDbContext db,Employee? e,int c,string title,string message){if(string.IsNullOrWhiteSpace(e?.ApplicationUserId))return;db.Notifications.Add(new Notification{CompanyId=c,ApplicationUserId=e.ApplicationUserId,Title=title,Message=message});}
+private static string EmployeeName(Employee? e)=>e is null?"–":$"{e.FirstName} {e.LastName}".Trim();private static string StatusText(ShiftSwapRequestStatus s)=>s switch{ShiftSwapRequestStatus.Open=>"Offen",ShiftSwapRequestStatus.Claimed=>"Angefragt",ShiftSwapRequestStatus.Approved=>"Genehmigt",ShiftSwapRequestStatus.Rejected=>"Abgelehnt",ShiftSwapRequestStatus.Cancelled=>"Abgebrochen",_=>s.ToString()};}
