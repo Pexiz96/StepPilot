@@ -53,18 +53,15 @@ else
             {
                 <div class="availability-row">
                     <div class="availability-day">@DayName(row.Day)</div>
-                    <label class="availability-check">
-                        <input type="checkbox" @bind="row.IsAvailable" />
-                        verfügbar
-                    </label>
-                    <div>
-                        <label class="availability-label">Von</label>
-                        <input class="availability-time" type="time" @bind="row.From" disabled="@(!row.IsAvailable)" />
-                    </div>
-                    <div>
-                        <label class="availability-label">Bis</label>
-                        <input class="availability-time" type="time" @bind="row.Until" disabled="@(!row.IsAvailable)" />
-                    </div>
+                    <MudCheckBox T="bool" @bind-Value="row.IsAvailable" Label="verfügbar" />
+                    <MudTimePicker Label="Von"
+                                   @bind-Time="row.From"
+                                   Disabled="@(!row.IsAvailable)"
+                                   Variant="Variant.Outlined" />
+                    <MudTimePicker Label="Bis"
+                                   @bind-Time="row.Until"
+                                   Disabled="@(!row.IsAvailable)"
+                                   Variant="Variant.Outlined" />
                 </div>
             }
         </div>
@@ -162,8 +159,8 @@ else
         {
             var item = existing.FirstOrDefault(x => x.DayOfWeek == row.Day);
             row.IsAvailable = item?.IsAvailable ?? true;
-            row.From = item?.AvailableFrom?.ToString("HH:mm") ?? string.Empty;
-            row.Until = item?.AvailableUntil?.ToString("HH:mm") ?? string.Empty;
+            row.From = item?.AvailableFrom?.ToTimeSpan();
+            row.Until = item?.AvailableUntil?.ToTimeSpan();
         }
 
         _message = string.Empty;
@@ -195,8 +192,8 @@ else
                 EmployeeId = _selectedEmployeeId,
                 DayOfWeek = row.Day,
                 IsAvailable = row.IsAvailable,
-                AvailableFrom = ParseTime(row.From),
-                AvailableUntil = ParseTime(row.Until)
+                AvailableFrom = row.From is null ? null : TimeOnly.FromTimeSpan(row.From.Value),
+                AvailableUntil = row.Until is null ? null : TimeOnly.FromTimeSpan(row.Until.Value)
             });
         }
 
@@ -204,9 +201,6 @@ else
         _messageSeverity = Severity.Success;
         _message = "Verfügbarkeiten wurden gespeichert.";
     }
-
-    private static TimeOnly? ParseTime(string? value)
-        => TimeOnly.TryParse(value, out var time) ? time : null;
 
     private static string DayName(DayOfWeek day) => day switch
     {
@@ -224,17 +218,14 @@ else
     {
         public DayOfWeek Day { get; init; }
         public bool IsAvailable { get; set; } = true;
-        public string From { get; set; } = string.Empty;
-        public string Until { get; set; } = string.Empty;
+        public TimeSpan? From { get; set; }
+        public TimeSpan? Until { get; set; }
     }
 }
 
 <style>
     .availability-grid { display: grid; gap: 10px; }
-    .availability-row { display: grid; grid-template-columns: 160px 130px minmax(150px, 1fr) minmax(150px, 1fr); gap: 18px; align-items: end; padding: 14px 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; }
-    .availability-day { font-weight: 600; align-self: center; }
-    .availability-check { display: flex; align-items: center; gap: 8px; align-self: center; }
-    .availability-label { display: block; font-size: .78rem; opacity: .7; margin-bottom: 4px; }
-    .availability-time { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.16); background: transparent; color: inherit; }
+    .availability-row { display: grid; grid-template-columns: 160px 130px minmax(150px, 1fr) minmax(150px, 1fr); gap: 18px; align-items: center; padding: 14px 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; }
+    .availability-day { font-weight: 600; }
     @@media (max-width: 800px) { .availability-row { grid-template-columns: 1fr 1fr; } }
 </style>
