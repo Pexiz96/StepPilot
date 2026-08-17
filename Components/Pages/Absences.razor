@@ -105,8 +105,7 @@ else
                 <MudSelect T="int"
                            @bind-Value="_edit.EmployeeId"
                            Label="Mitarbeiter"
-                           Variant="Variant.Outlined"
-                           FullWidth="true">
+                           Variant="Variant.Outlined">
 
                     @foreach (var employee in _employees)
                     {
@@ -125,7 +124,6 @@ else
                            @bind-Value="_edit.Type"
                            Label="Art der Abwesenheit"
                            Variant="Variant.Outlined"
-                           FullWidth="true"
                            Class="mt-3">
 
                     <MudSelectItem T="AbsenceType"
@@ -180,8 +178,7 @@ else
                     <MudDatePicker Label="Von"
                                    @bind-Date="_from"
                                    Variant="Variant.Outlined"
-                                   DateFormat="dd.MM.yyyy"
-                                   FullWidth="true" />
+                                   DateFormat="dd.MM.yyyy" />
 
                 </MudItem>
 
@@ -192,8 +189,7 @@ else
                     <MudDatePicker Label="Bis"
                                    @bind-Date="_to"
                                    Variant="Variant.Outlined"
-                                   DateFormat="dd.MM.yyyy"
-                                   FullWidth="true" />
+                                   DateFormat="dd.MM.yyyy" />
 
                 </MudItem>
 
