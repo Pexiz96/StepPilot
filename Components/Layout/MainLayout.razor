@@ -10,7 +10,9 @@
     <MudAppBar Elevation="0" Class="sp-appbar">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" OnClick="ToggleDrawer" />
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1"><span class="sp-brand-mark">S</span><MudText Typo="Typo.h6" Class="sp-brand">StepPilot</MudText></MudStack>
-        <MudSpacer /><MudIconButton Icon="@Icons.Material.Filled.AccountCircle" Href="/Account/Manage" />
+        <MudSpacer />
+        <AuthorizeView><MudIconButton Icon="@Icons.Material.Filled.Notifications" Href="/notifications" /></AuthorizeView>
+        <MudIconButton Icon="@Icons.Material.Filled.AccountCircle" Href="/Account/Manage" />
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Class="sp-drawer">
@@ -23,7 +25,7 @@
             </AuthorizeView>
             <AuthorizeView Roles="@($"{AppRoles.Owner},{AppRoles.Admin}")"><MudNavLink Href="/user-accounts" Icon="@Icons.Material.Filled.ManageAccounts">Benutzerkonten</MudNavLink></AuthorizeView>
             <AuthorizeView Roles="@AppRoles.Employee"><MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Meine Verfügbarkeit</MudNavLink><MudNavLink Href="/open-shifts" Icon="@Icons.Material.Filled.AddTask">Offene Schichten</MudNavLink><MudNavLink Href="/shift-swaps" Icon="@Icons.Material.Filled.SwapHoriz">Schichttausch</MudNavLink></AuthorizeView>
-            <AuthorizeView><MudNavLink Href="/my-schedule" Icon="@Icons.Material.Filled.Event">Meine Schichten</MudNavLink></AuthorizeView>
+            <AuthorizeView><MudNavLink Href="/notifications" Icon="@Icons.Material.Filled.Notifications">Benachrichtigungen</MudNavLink><MudNavLink Href="/my-schedule" Icon="@Icons.Material.Filled.Event">Meine Schichten</MudNavLink></AuthorizeView>
         </MudNavMenu>
     </MudDrawer>
     <MudMainContent Class="sp-main"><MudContainer MaxWidth="MaxWidth.False" Class="sp-content">@Body</MudContainer></MudMainContent>
