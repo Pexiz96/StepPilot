@@ -1,0 +1,129 @@
+@page "/action-center"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+
+<PageTitle>Handlungszentrum | StepPilot</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-5">
+    <div>
+        <MudText Typo="Typo.h4">Handlungszentrum</MudText>
+        <MudText Color="Color.Secondary">Alle offenen Personalentscheidungen an einem Ort.</MudText>
+    </div>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Aktualisieren</MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudGrid Class="mb-5">
+        <MudItem xs="12" sm="6" lg="3">
+            <MudPaper Class="pa-4">
+                <MudText Color="Color.Secondary">Urlaubsanträge</MudText>
+                <MudText Typo="Typo.h4">@_pendingAbsences</MudText>
+                <MudButton Href="/absences" Variant="Variant.Text" Class="mt-2">Öffnen</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudPaper Class="pa-4">
+                <MudText Color="Color.Secondary">Schichtanfragen</MudText>
+                <MudText Typo="Typo.h4">@_pendingOpenShiftRequests</MudText>
+                <MudButton Href="/open-shift-requests" Variant="Variant.Text" Class="mt-2">Öffnen</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudPaper Class="pa-4">
+                <MudText Color="Color.Secondary">Tauschanfragen</MudText>
+                <MudText Typo="Typo.h4">@_pendingSwapRequests</MudText>
+                <MudButton Href="/shift-swap-requests" Variant="Variant.Text" Class="mt-2">Öffnen</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudPaper Class="pa-4">
+                <MudText Color="Color.Secondary">Unterbesetzte Schichten</MudText>
+                <MudText Typo="Typo.h4">@_understaffedShifts</MudText>
+                <MudButton Href="/schedule" Variant="Variant.Text" Class="mt-2">Planung öffnen</MudButton>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (TotalOpen == 0)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+            Aktuell sind keine offenen Personalentscheidungen vorhanden.
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+            @TotalOpen offene Punkte benötigen Aufmerksamkeit.
+        </MudAlert>
+
+        <MudPaper Class="pa-5">
+            <MudText Typo="Typo.h6" Class="mb-3">Prioritäten</MudText>
+            <MudList T="string">
+                @if (_understaffedShifts > 0)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.WarningAmber">
+                        @_understaffedShifts unterbesetzte Schicht(en) prüfen und besetzen.
+                    </MudListItem>
+                }
+                @if (_pendingAbsences > 0)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.EventBusy">
+                        @_pendingAbsences offene Urlaubsanträge entscheiden.
+                    </MudListItem>
+                }
+                @if (_pendingOpenShiftRequests > 0)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.AddTask">
+                        @_pendingOpenShiftRequests freiwillige Schichtübernahme(n) prüfen.
+                    </MudListItem>
+                }
+                @if (_pendingSwapRequests > 0)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.SwapHoriz">
+                        @_pendingSwapRequests Schichttausch-Anfrage(n) prüfen.
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private int _pendingAbsences;
+    private int _pendingOpenShiftRequests;
+    private int _pendingSwapRequests;
+    private int _understaffedShifts;
+    private int TotalOpen => _pendingAbsences + _pendingOpenShiftRequests + _pendingSwapRequests + _understaffedShifts;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var companyId = await TenantGuard.RequireCompanyIdAsync();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            _pendingAbsences = await db.Absences.CountAsync(x => x.CompanyId == companyId && x.Status == AbsenceStatus.Requested);
+            _pendingOpenShiftRequests = await db.OpenShiftRequests.CountAsync(x => x.CompanyId == companyId && x.Status == OpenShiftRequestStatus.Pending);
+            _pendingSwapRequests = await db.ShiftSwapRequests.CountAsync(x => x.CompanyId == companyId && x.Status == ShiftSwapRequestStatus.Claimed);
+            _understaffedShifts = await db.Shifts
+                .Where(x => x.CompanyId == companyId && x.Date >= today)
+                .CountAsync(x => x.Assignments.Count < x.RequiredEmployees);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
