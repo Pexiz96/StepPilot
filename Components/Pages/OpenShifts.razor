@@ -1,0 +1,100 @@
+@page "/open-shifts"
+@attribute [Authorize(Roles = AppRoles.Employee)]
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject PlanningService PlanningService
+
+<PageTitle>Offene Schichten | StepPilot</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Offene Schichten</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Übernimm freiwillig freie Schichten. Deine Anfrage wird vor der Freigabe geprüft.</MudText>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+}
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!_hasEmployeeProfile)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Deinem Benutzerkonto ist noch kein Mitarbeiterprofil zugeordnet.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6">Verfügbare Einsätze</MudText>
+        <MudText Color="Color.Secondary">Es werden nur veröffentlichte, noch nicht vollständig besetzte Schichten ab heute angezeigt.</MudText>
+    </MudPaper>
+
+    <MudTable Items="_shifts" Hover="true" Striped="true">
+        <HeaderContent><MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Standort</MudTh><MudTh>Offene Plätze</MudTh><MudTh>Status</MudTh><MudTh>Aktion</MudTh></HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Date.ToString("dd.MM.yyyy")</MudTd>
+            <MudTd>@context.StartTime.ToString("HH:mm")–@context.EndTime.ToString("HH:mm")</MudTd>
+            <MudTd>@(context.Location?.Name ?? "–")</MudTd>
+            <MudTd>@Math.Max(0, context.RequiredEmployees - context.Assignments.Count)</MudTd>
+            <MudTd>@RequestStatus(context.Id)</MudTd>
+            <MudTd>
+                @if (!_requestByShift.ContainsKey(context.Id))
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => Apply(context.Id))">Übernahme anfragen</MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText Class="pa-4" Color="Color.Secondary">Aktuell sind keine offenen Schichten verfügbar.</MudText></NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _hasEmployeeProfile;
+    private int _companyId;
+    private int _employeeId;
+    private List<Shift> _shifts = [];
+    private Dictionary<int, OpenShiftRequestStatus> _requestByShift = [];
+    private string _message = string.Empty;
+    private Severity _severity = Severity.Info;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(auth.User);
+            if (user?.CompanyId is null) return;
+            _companyId = user.CompanyId.Value;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var employeeId = await db.Employees.Where(x => x.CompanyId == _companyId && x.ApplicationUserId == user.Id && x.IsActive).Select(x => (int?)x.Id).FirstOrDefaultAsync();
+            if (employeeId is null) return;
+            _employeeId = employeeId.Value;
+            _hasEmployeeProfile = true;
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            _shifts = await db.Shifts.AsNoTracking().Include(x => x.Schedule).Include(x => x.Location).Include(x => x.Assignments)
+                .Where(x => x.CompanyId == _companyId && x.Date >= today && x.Schedule != null && x.Schedule.Status == ScheduleStatus.Published && x.Assignments.Count < x.RequiredEmployees && !x.Assignments.Any(a => a.EmployeeId == _employeeId))
+                .OrderBy(x => x.Date).ThenBy(x => x.StartTime).ToListAsync();
+            _requestByShift = await db.OpenShiftRequests.AsNoTracking().Where(x => x.CompanyId == _companyId && x.EmployeeId == _employeeId).ToDictionaryAsync(x => x.ShiftId, x => x.Status);
+        }
+        finally { _loading = false; }
+    }
+
+    private string RequestStatus(int shiftId) => _requestByShift.TryGetValue(shiftId, out var status) ? status switch { OpenShiftRequestStatus.Pending => "Angefragt", OpenShiftRequestStatus.Approved => "Genehmigt", OpenShiftRequestStatus.Rejected => "Abgelehnt", _ => "–" } : "Offen";
+
+    private async Task Apply(int shiftId)
+    {
+        var conflicts = await PlanningService.ValidateAssignmentAsync(_employeeId, shiftId);
+        if (conflicts.Count > 0) { _severity = Severity.Error; _message = $"Übernahme nicht möglich: {conflicts[0]}"; return; }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.OpenShiftRequests.AnyAsync(x => x.CompanyId == _companyId && x.ShiftId == shiftId && x.EmployeeId == _employeeId)) return;
+        db.OpenShiftRequests.Add(new OpenShiftRequest { CompanyId = _companyId, ShiftId = shiftId, EmployeeId = _employeeId });
+        await db.SaveChangesAsync();
+        _severity = Severity.Success; _message = "Deine Anfrage wurde an die Planung gesendet.";
+        await LoadAsync();
+    }
+}
