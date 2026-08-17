@@ -39,7 +39,7 @@ else
             <MudTd>@context.Planned.ToString("0.##") h</MudTd>
             <MudTd>@Signed(context.Difference) h</MudTd>
             <MudTd>
-                <MudProgressLinear Value="@context.Utilization" Color="@(context.Utilization > 105 ? Color.Error : context.Utilization > 95 ? Color.Warning : Color.Primary)" Rounded="true" />
+                <MudProgressLinear Value="@((double)context.Utilization)" Color="@(context.Utilization > 105 ? Color.Error : context.Utilization > 95 ? Color.Warning : Color.Primary)" Rounded="true" />
                 <MudText Typo="Typo.caption">@context.Utilization.ToString("0.#") %</MudText>
             </MudTd>
         </RowTemplate>
