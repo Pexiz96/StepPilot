@@ -1,0 +1,151 @@
+@page "/shift-swaps"
+@attribute [Authorize(Roles = AppRoles.Employee)]
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject PlanningService PlanningService
+
+<PageTitle>Schichttausch | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-2">Schichttausch</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Gib eine eigene veröffentlichte Schicht zum Tausch frei oder übernimm eine freigegebene Schicht eines Kollegen.</MudText>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+}
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (!_hasEmployeeProfile)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Deinem Benutzerkonto ist noch kein Mitarbeiterprofil zugeordnet.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-4 mb-5">
+        <MudText Typo="Typo.h6" Class="mb-3">Meine kommenden Schichten</MudText>
+        <MudTable Items="_myAssignments" Dense="true" Hover="true">
+            <HeaderContent><MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Standort</MudTh><MudTh>Aktion</MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Shift?.Date.ToString("dd.MM.yyyy")</MudTd>
+                <MudTd>@context.Shift?.StartTime.ToString("HH:mm")–@context.Shift?.EndTime.ToString("HH:mm")</MudTd>
+                <MudTd>@(context.Shift?.Location?.Name ?? "–")</MudTd>
+                <MudTd>
+                    @if (!_ownSwapAssignmentIds.Contains(context.Id))
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ReleaseForSwap(context.Id))">Zum Tausch freigeben</MudButton>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">Freigegeben</MudChip>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Verfügbare Tauschangebote</MudText>
+        <MudTable Items="_openSwaps" Hover="true" Striped="true">
+            <HeaderContent><MudTh>Von</MudTh><MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Standort</MudTh><MudTh>Aktion</MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd>@EmployeeName(context.FromEmployee)</MudTd>
+                <MudTd>@context.ShiftAssignment?.Shift?.Date.ToString("dd.MM.yyyy")</MudTd>
+                <MudTd>@context.ShiftAssignment?.Shift?.StartTime.ToString("HH:mm")–@context.ShiftAssignment?.Shift?.EndTime.ToString("HH:mm")</MudTd>
+                <MudTd>@(context.ShiftAssignment?.Shift?.Location?.Name ?? "–")</MudTd>
+                <MudTd><MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ClaimSwap(context.Id))">Tausch anfragen</MudButton></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4" Color="Color.Secondary">Aktuell sind keine Schichten zum Tausch freigegeben.</MudText></NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _hasEmployeeProfile;
+    private int _companyId;
+    private int _employeeId;
+    private List<ShiftAssignment> _myAssignments = [];
+    private List<ShiftSwapRequest> _openSwaps = [];
+    private HashSet<int> _ownSwapAssignmentIds = [];
+    private string _message = string.Empty;
+    private Severity _severity = Severity.Info;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(auth.User);
+            if (user?.CompanyId is null) return;
+            _companyId = user.CompanyId.Value;
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var employeeId = await db.Employees
+                .Where(x => x.CompanyId == _companyId && x.ApplicationUserId == user.Id && x.IsActive)
+                .Select(x => (int?)x.Id)
+                .FirstOrDefaultAsync();
+            if (employeeId is null) return;
+            _employeeId = employeeId.Value;
+            _hasEmployeeProfile = true;
+
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            _myAssignments = await db.ShiftAssignments.AsNoTracking()
+                .Include(x => x.Shift).ThenInclude(x => x!.Location)
+                .Include(x => x.Shift).ThenInclude(x => x!.Schedule)
+                .Where(x => x.CompanyId == _companyId && x.EmployeeId == _employeeId && x.Shift != null && x.Shift.Date >= today && x.Shift.Schedule != null && x.Shift.Schedule.Status == ScheduleStatus.Published)
+                .OrderBy(x => x.Shift!.Date).ThenBy(x => x.Shift!.StartTime)
+                .ToListAsync();
+
+            _ownSwapAssignmentIds = (await db.ShiftSwapRequests.AsNoTracking()
+                .Where(x => x.CompanyId == _companyId && x.FromEmployeeId == _employeeId && (x.Status == ShiftSwapRequestStatus.Open || x.Status == ShiftSwapRequestStatus.Claimed))
+                .Select(x => x.ShiftAssignmentId)
+                .ToListAsync()).ToHashSet();
+
+            _openSwaps = await db.ShiftSwapRequests.AsNoTracking()
+                .Include(x => x.FromEmployee)
+                .Include(x => x.ShiftAssignment).ThenInclude(x => x!.Shift).ThenInclude(x => x!.Location)
+                .Where(x => x.CompanyId == _companyId && x.Status == ShiftSwapRequestStatus.Open && x.FromEmployeeId != _employeeId)
+                .OrderBy(x => x.ShiftAssignment!.Shift!.Date)
+                .ThenBy(x => x.ShiftAssignment!.Shift!.StartTime)
+                .ToListAsync();
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task ReleaseForSwap(int assignmentId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var assignment = await db.ShiftAssignments.Include(x => x.Shift).ThenInclude(x => x!.Schedule)
+            .FirstOrDefaultAsync(x => x.Id == assignmentId && x.CompanyId == _companyId && x.EmployeeId == _employeeId);
+        if (assignment?.Shift?.Schedule?.Status != ScheduleStatus.Published) return;
+        if (await db.ShiftSwapRequests.AnyAsync(x => x.CompanyId == _companyId && x.ShiftAssignmentId == assignmentId && (x.Status == ShiftSwapRequestStatus.Open || x.Status == ShiftSwapRequestStatus.Claimed))) return;
+        db.ShiftSwapRequests.Add(new ShiftSwapRequest { CompanyId = _companyId, ShiftAssignmentId = assignmentId, FromEmployeeId = _employeeId });
+        await db.SaveChangesAsync();
+        _severity = Severity.Success; _message = "Schicht wurde zum Tausch freigegeben.";
+        await LoadAsync();
+    }
+
+    private async Task ClaimSwap(int swapId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var swap = await db.ShiftSwapRequests.Include(x => x.ShiftAssignment).ThenInclude(x => x!.Shift)
+            .FirstOrDefaultAsync(x => x.Id == swapId && x.CompanyId == _companyId && x.Status == ShiftSwapRequestStatus.Open);
+        if (swap?.ShiftAssignment?.Shift is null || swap.FromEmployeeId == _employeeId) return;
+        var conflicts = await PlanningService.ValidateAssignmentAsync(_employeeId, swap.ShiftAssignment.ShiftId);
+        if (conflicts.Count > 0) { _severity = Severity.Error; _message = $"Tausch nicht möglich: {conflicts[0]}"; return; }
+        swap.ToEmployeeId = _employeeId;
+        swap.Status = ShiftSwapRequestStatus.Claimed;
+        swap.ClaimedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        _severity = Severity.Success; _message = "Tauschanfrage wurde an die Planung gesendet.";
+        await LoadAsync();
+    }
+
+    private static string EmployeeName(Employee? employee) => employee is null ? "–" : $"{employee.FirstName} {employee.LastName}".Trim();
+}
