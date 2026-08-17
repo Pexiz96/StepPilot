@@ -11,7 +11,7 @@
     <MudDatePicker Label="Wochenbeginn" @bind-Date="_weekStart" />
     <MudButton Class="ml-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadWeek">Woche laden</MudButton>
     <MudButton Class="ml-2" Variant="Variant.Outlined" OnClick="CreateSchedule">Wochenplan anlegen</MudButton>
-    @if (_schedule is not null)
+    @if (_schedule is not null && _schedule.Status != ScheduleStatus.Published && _schedule.Status != ScheduleStatus.Closed)
     {
         <MudButton Class="ml-2" Variant="Variant.Filled" Color="Color.Success" OnClick="AutoPlan">Automatisch planen</MudButton>
         <MudButton Class="ml-2" Variant="Variant.Filled" Color="Color.Primary" OnClick="Publish">Veröffentlichen</MudButton>
@@ -20,32 +20,65 @@
 
 @if (_schedule is not null)
 {
-    <MudText Typo="Typo.h6" Class="mb-3">
-        Woche ab @_schedule.WeekStart.ToString("dd.MM.yyyy") – Status: @_schedule.Status
-    </MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+        <MudText Typo="Typo.h6">Woche ab @_schedule.WeekStart.ToString("dd.MM.yyyy") – Status: @_schedule.Status</MudText>
+        <MudSpacer />
+        @if (_schedule.Status == ScheduleStatus.Published)
+        {
+            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined">Veröffentlicht</MudChip>
+        }
+    </MudStack>
 
-    <MudPaper Class="pa-4 mb-5">
-        <MudSelect T="int" @bind-Value="_newShift.TemplateId" Label="Schichtvorlage">
-            @foreach (var t in _templates)
-            {
-                <MudSelectItem Value="@t.Id">@t.Name (@t.StartTime.ToString("HH:mm")–@t.EndTime.ToString("HH:mm"))</MudSelectItem>
-            }
-        </MudSelect>
-        <MudDatePicker Label="Datum" @bind-Date="_newShift.Date" Class="mt-3" />
-        <MudNumericField T="int" @bind-Value="_newShift.RequiredEmployees" Label="Benötigte Mitarbeiter" Class="mt-3" />
-        <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="AddShift">Schicht hinzufügen</MudButton>
-    </MudPaper>
+    @if (_schedule.Status == ScheduleStatus.Published || _schedule.Status == ScheduleStatus.Closed)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+            Dieser Dienstplan ist veröffentlicht und vor versehentlichen Änderungen geschützt.
+        </MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="pa-4 mb-5">
+            <MudSelect T="int" @bind-Value="_newShift.TemplateId" Label="Schichtvorlage">
+                @foreach (var t in _templates)
+                {
+                    <MudSelectItem Value="@t.Id">@t.Name (@t.StartTime.ToString("HH:mm")–@t.EndTime.ToString("HH:mm"))</MudSelectItem>
+                }
+            </MudSelect>
+            <MudDatePicker Label="Datum" @bind-Date="_newShift.Date" Class="mt-3" />
+            <MudNumericField T="int" @bind-Value="_newShift.RequiredEmployees" Label="Benötigte Mitarbeiter" Class="mt-3" />
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="AddShift">Schicht hinzufügen</MudButton>
+        </MudPaper>
+    }
 
-    <MudTable Items="_schedule.Shifts.OrderBy(x => x.Date).ThenBy(x => x.StartTime)">
+    <MudTable Items="_schedule.Shifts.OrderBy(x => x.Date).ThenBy(x => x.StartTime)" Hover="true">
         <HeaderContent>
-            <MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Bedarf</MudTh><MudTh>Zugewiesen</MudTh><MudTh>Aktion</MudTh>
+            <MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Bedarf</MudTh><MudTh>Zugewiesen</MudTh><MudTh>Besetzung</MudTh><MudTh>Aktion</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd>@context.Date.ToString("dd.MM.yyyy")</MudTd>
             <MudTd>@context.StartTime.ToString("HH:mm")–@context.EndTime.ToString("HH:mm")</MudTd>
             <MudTd>@context.RequiredEmployees</MudTd>
             <MudTd>@context.Assignments.Count</MudTd>
-            <MudTd><MudButton Size="Size.Small" Href="@($"/schedule/shift/{context.Id}")">Besetzen</MudButton></MudTd>
+            <MudTd>
+                @if (context.Assignments.Count >= context.RequiredEmployees)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">Vollständig</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning">@(context.RequiredEmployees - context.Assignments.Count) offen</MudChip>
+                }
+            </MudTd>
+            <MudTd>
+                @if (_schedule.Status != ScheduleStatus.Published && _schedule.Status != ScheduleStatus.Closed)
+                {
+                    <MudButton Size="Size.Small" Href="@($"/schedule/shift/{context.Id}")">Besetzen</MudButton>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption">Gesperrt</MudText>
+                }
+            </MudTd>
         </RowTemplate>
     </MudTable>
 }
@@ -87,10 +120,8 @@
     private async Task CreateSchedule()
     {
         if (_weekStart is null) return;
-
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
-
         var monday = NormalizeMonday(_weekStart.Value);
 
         if (await db.Schedules.AnyAsync(x => x.CompanyId == companyId && x.WeekStart == monday))
@@ -106,11 +137,10 @@
 
     private async Task AddShift()
     {
-        if (_schedule is null || _newShift.Date is null || _newShift.TemplateId == 0) return;
+        if (_schedule is null || _schedule.Status == ScheduleStatus.Published || _schedule.Status == ScheduleStatus.Closed || _newShift.Date is null || _newShift.TemplateId == 0) return;
 
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
-
         var template = await db.ShiftTemplates.FirstAsync(x => x.Id == _newShift.TemplateId && x.CompanyId == companyId);
 
         db.Shifts.Add(new Shift
@@ -131,7 +161,7 @@
 
     private async Task AutoPlan()
     {
-        if (_schedule is null) return;
+        if (_schedule is null || _schedule.Status == ScheduleStatus.Published || _schedule.Status == ScheduleStatus.Closed) return;
         await PlanningService.AutoPlanAsync(_schedule.Id);
         await LoadWeek();
     }
@@ -139,14 +169,12 @@
     private async Task Publish()
     {
         if (_schedule is null) return;
-
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
 
         var schedule = await db.Schedules.FirstAsync(x => x.Id == _schedule.Id && x.CompanyId == companyId);
         schedule.Status = ScheduleStatus.Published;
         schedule.PublishedAt = DateTime.UtcNow;
-
         await db.SaveChangesAsync();
         await LoadWeek();
     }
