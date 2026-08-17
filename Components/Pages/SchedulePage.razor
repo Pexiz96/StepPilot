@@ -5,13 +5,19 @@
 @inject PlanningService PlanningService
 
 <PageTitle>Schichtplanung | StepPilot</PageTitle>
-<MudText Typo="Typo.h4" Class="mb-4">Schichtplanung</MudText>
+<MudText Typo="Typo.h4" Class="mb-2">Schichtplanung</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Plane den Personalbedarf und erkenne Unterbesetzungen vor der Veröffentlichung.</MudText>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_messageSeverity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+}
 
 <MudPaper Class="pa-4 mb-5">
     <MudDatePicker Label="Wochenbeginn" @bind-Date="_weekStart" />
     <MudButton Class="ml-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadWeek">Woche laden</MudButton>
     <MudButton Class="ml-2" Variant="Variant.Outlined" OnClick="CreateSchedule">Wochenplan anlegen</MudButton>
-    @if (_schedule is not null && _schedule.Status != ScheduleStatus.Published && _schedule.Status != ScheduleStatus.Closed)
+    @if (_schedule is not null && CanEdit)
     {
         <MudButton Class="ml-2" Variant="Variant.Filled" Color="Color.Success" OnClick="AutoPlan">Automatisch planen</MudButton>
         <MudButton Class="ml-2" Variant="Variant.Filled" Color="Color.Primary" OnClick="Publish">Veröffentlichen</MudButton>
@@ -20,6 +26,12 @@
 
 @if (_schedule is not null)
 {
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Schichten</MudText><MudText Typo="Typo.h4">@_schedule.Shifts.Count</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Benötigte Besetzungen</MudText><MudText Typo="Typo.h4">@RequiredAssignments</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Noch offen</MudText><MudText Typo="Typo.h4">@OpenAssignments</MudText></MudPaper></MudItem>
+    </MudGrid>
+
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
         <MudText Typo="Typo.h6">Woche ab @_schedule.WeekStart.ToString("dd.MM.yyyy") – Status: @_schedule.Status</MudText>
         <MudSpacer />
@@ -29,11 +41,18 @@
         }
     </MudStack>
 
-    @if (_schedule.Status == ScheduleStatus.Published || _schedule.Status == ScheduleStatus.Closed)
+    @if (OpenAssignments > 0)
     {
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
-            Dieser Dienstplan ist veröffentlicht und vor versehentlichen Änderungen geschützt.
-        </MudAlert>
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">Der Plan ist noch nicht vollständig: @OpenAssignments Besetzung(en) fehlen. StepPilot verhindert die Veröffentlichung, bis alle Schichten vollständig besetzt sind.</MudAlert>
+    }
+    else if (_schedule.Shifts.Count > 0 && CanEdit)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-4">Alle Schichten sind vollständig besetzt. Der Plan kann veröffentlicht werden.</MudAlert>
+    }
+
+    @if (!CanEdit)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">Dieser Dienstplan ist veröffentlicht bzw. geschlossen und vor versehentlichen Änderungen geschützt.</MudAlert>
     }
     else
     {
@@ -50,10 +69,8 @@
         </MudPaper>
     }
 
-    <MudTable Items="_schedule.Shifts.OrderBy(x => x.Date).ThenBy(x => x.StartTime)" Hover="true">
-        <HeaderContent>
-            <MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Bedarf</MudTh><MudTh>Zugewiesen</MudTh><MudTh>Besetzung</MudTh><MudTh>Aktion</MudTh>
-        </HeaderContent>
+    <MudTable Items="_schedule.Shifts.OrderBy(x => x.Date).ThenBy(x => x.StartTime)" Hover="true" Striped="true">
+        <HeaderContent><MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Bedarf</MudTh><MudTh>Zugewiesen</MudTh><MudTh>Besetzung</MudTh><MudTh>Aktion</MudTh></HeaderContent>
         <RowTemplate>
             <MudTd>@context.Date.ToString("dd.MM.yyyy")</MudTd>
             <MudTd>@context.StartTime.ToString("HH:mm")–@context.EndTime.ToString("HH:mm")</MudTd>
@@ -69,16 +86,7 @@
                     <MudChip T="string" Size="Size.Small" Color="Color.Warning">@(context.RequiredEmployees - context.Assignments.Count) offen</MudChip>
                 }
             </MudTd>
-            <MudTd>
-                @if (_schedule.Status != ScheduleStatus.Published && _schedule.Status != ScheduleStatus.Closed)
-                {
-                    <MudButton Size="Size.Small" Href="@($"/schedule/shift/{context.Id}")">Besetzen</MudButton>
-                }
-                else
-                {
-                    <MudText Typo="Typo.caption">Gesperrt</MudText>
-                }
-            </MudTd>
+            <MudTd>@if (CanEdit) { <MudButton Size="Size.Small" Href="@($"/schedule/shift/{context.Id}")">Besetzen</MudButton> } else { <MudText Typo="Typo.caption">Gesperrt</MudText> }</MudTd>
         </RowTemplate>
     </MudTable>
 }
@@ -88,10 +96,16 @@
     private Schedule? _schedule;
     private List<ShiftTemplate> _templates = [];
     private NewShiftVm _newShift = new() { Date = DateTime.Today, RequiredEmployees = 1 };
+    private string _message = string.Empty;
+    private Severity _messageSeverity = Severity.Info;
+
+    private bool CanEdit => _schedule is not null && _schedule.Status != ScheduleStatus.Published && _schedule.Status != ScheduleStatus.Closed;
+    private int RequiredAssignments => _schedule?.Shifts.Sum(x => x.RequiredEmployees) ?? 0;
+    private int OpenAssignments => _schedule?.Shifts.Sum(x => Math.Max(0, x.RequiredEmployees - x.Assignments.Count)) ?? 0;
 
     protected override async Task OnInitializedAsync() => await LoadWeek();
 
-    private DateOnly NormalizeMonday(DateTime value)
+    private static DateOnly NormalizeMonday(DateTime value)
     {
         var d = DateOnly.FromDateTime(value.Date);
         var delta = (7 + (int)d.DayOfWeek - (int)DayOfWeek.Monday) % 7;
@@ -103,18 +117,10 @@
         if (_weekStart is null) return;
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         var monday = NormalizeMonday(_weekStart.Value);
-
         await using var db = await DbFactory.CreateDbContextAsync();
-
-        _schedule = await db.Schedules
-            .Include(x => x.Shifts)
-            .ThenInclude(x => x.Assignments)
-            .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.WeekStart == monday);
-
-        _templates = await db.ShiftTemplates.AsNoTracking()
-            .Where(x => x.CompanyId == companyId && x.IsActive)
-            .OrderBy(x => x.Name)
-            .ToListAsync();
+        _schedule = await db.Schedules.Include(x => x.Shifts).ThenInclude(x => x.Assignments).FirstOrDefaultAsync(x => x.CompanyId == companyId && x.WeekStart == monday);
+        _templates = await db.ShiftTemplates.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).OrderBy(x => x.Name).ToListAsync();
+        _message = string.Empty;
     }
 
     private async Task CreateSchedule()
@@ -123,13 +129,7 @@
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
         var monday = NormalizeMonday(_weekStart.Value);
-
-        if (await db.Schedules.AnyAsync(x => x.CompanyId == companyId && x.WeekStart == monday))
-        {
-            await LoadWeek();
-            return;
-        }
-
+        if (await db.Schedules.AnyAsync(x => x.CompanyId == companyId && x.WeekStart == monday)) { await LoadWeek(); return; }
         db.Schedules.Add(new Schedule { CompanyId = companyId, WeekStart = monday });
         await db.SaveChangesAsync();
         await LoadWeek();
@@ -137,52 +137,54 @@
 
     private async Task AddShift()
     {
-        if (_schedule is null || _schedule.Status == ScheduleStatus.Published || _schedule.Status == ScheduleStatus.Closed || _newShift.Date is null || _newShift.TemplateId == 0) return;
-
+        if (!CanEdit || _schedule is null || _newShift.Date is null || _newShift.TemplateId == 0) return;
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
         var template = await db.ShiftTemplates.FirstAsync(x => x.Id == _newShift.TemplateId && x.CompanyId == companyId);
-
-        db.Shifts.Add(new Shift
-        {
-            CompanyId = companyId,
-            ScheduleId = _schedule.Id,
-            ShiftTemplateId = template.Id,
-            Date = DateOnly.FromDateTime(_newShift.Date.Value),
-            StartTime = template.StartTime,
-            EndTime = template.EndTime,
-            BreakMinutes = template.BreakMinutes,
-            RequiredEmployees = Math.Max(1, _newShift.RequiredEmployees)
-        });
-
+        db.Shifts.Add(new Shift { CompanyId = companyId, ScheduleId = _schedule.Id, ShiftTemplateId = template.Id, Date = DateOnly.FromDateTime(_newShift.Date.Value), StartTime = template.StartTime, EndTime = template.EndTime, BreakMinutes = template.BreakMinutes, RequiredEmployees = Math.Max(1, _newShift.RequiredEmployees) });
         await db.SaveChangesAsync();
         await LoadWeek();
     }
 
     private async Task AutoPlan()
     {
-        if (_schedule is null || _schedule.Status == ScheduleStatus.Published || _schedule.Status == ScheduleStatus.Closed) return;
+        if (!CanEdit || _schedule is null) return;
         await PlanningService.AutoPlanAsync(_schedule.Id);
         await LoadWeek();
+        _messageSeverity = OpenAssignments == 0 ? Severity.Success : Severity.Warning;
+        _message = OpenAssignments == 0 ? "Automatische Planung abgeschlossen. Alle Schichten sind besetzt." : $"Automatische Planung abgeschlossen. {OpenAssignments} Besetzung(en) konnten aufgrund der hinterlegten Regeln nicht automatisch gefüllt werden.";
     }
 
     private async Task Publish()
     {
-        if (_schedule is null) return;
+        if (!CanEdit || _schedule is null) return;
+        if (_schedule.Shifts.Count == 0) { _messageSeverity = Severity.Warning; _message = "Ein leerer Dienstplan kann nicht veröffentlicht werden."; return; }
+        if (OpenAssignments > 0) { _messageSeverity = Severity.Error; _message = $"Veröffentlichung nicht möglich: {OpenAssignments} Besetzung(en) sind noch offen."; return; }
+
+        foreach (var shift in _schedule.Shifts)
+        {
+            foreach (var assignment in shift.Assignments)
+            {
+                var problems = await PlanningService.ValidateAssignmentAsync(assignment.EmployeeId, shift.Id);
+                if (problems.Count > 0)
+                {
+                    _messageSeverity = Severity.Error;
+                    _message = $"Veröffentlichung gestoppt: Schicht am {shift.Date:dd.MM.yyyy} enthält einen Planungskonflikt: {problems[0]}";
+                    return;
+                }
+            }
+        }
+
         var companyId = await TenantGuard.RequireCompanyIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
-
         var schedule = await db.Schedules.FirstAsync(x => x.Id == _schedule.Id && x.CompanyId == companyId);
         schedule.Status = ScheduleStatus.Published;
         schedule.PublishedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         await LoadWeek();
+        _messageSeverity = Severity.Success;
+        _message = "Dienstplan wurde erfolgreich geprüft und veröffentlicht.";
     }
 
-    private sealed class NewShiftVm
-    {
-        public int TemplateId { get; set; }
-        public DateTime? Date { get; set; }
-        public int RequiredEmployees { get; set; }
-    }
+    private sealed class NewShiftVm { public int TemplateId { get; set; } public DateTime? Date { get; set; } public int RequiredEmployees { get; set; } }
 }
