@@ -1,0 +1,106 @@
+@page "/notifications"
+@attribute [Authorize]
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<PageTitle>Benachrichtigungen | StepPilot</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-5">
+    <div>
+        <MudText Typo="Typo.h4">Benachrichtigungen</MudText>
+        <MudText Color="Color.Secondary">Wichtige Änderungen rund um Dienstplan, Anfragen und Abwesenheiten.</MudText>
+    </div>
+    <MudSpacer />
+    @if (_items.Any(x => !x.IsRead))
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.DoneAll" OnClick="MarkAllRead">Alle als gelesen markieren</MudButton>
+    }
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Ungelesen</MudText><MudText Typo="Typo.h4">@_items.Count(x => !x.IsRead)</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Gesamt</MudText><MudText Typo="Typo.h4">@_items.Count</MudText></MudPaper></MudItem>
+    </MudGrid>
+
+    @if (_items.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Du hast aktuell keine Benachrichtigungen.</MudAlert>
+    }
+    else
+    {
+        <MudStack Spacing="2">
+            @foreach (var item in _items)
+            {
+                <MudPaper Class="pa-4">
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@(item.IsRead ? Icons.Material.Filled.NotificationsNone : Icons.Material.Filled.NotificationsActive)" Color="@(item.IsRead ? Color.Secondary : Color.Primary)" />
+                        <div>
+                            <MudText Typo="Typo.h6">@item.Title</MudText>
+                            <MudText>@item.Message</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@item.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudText>
+                        </div>
+                        <MudSpacer />
+                        @if (!item.IsRead)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Done" Color="Color.Success" OnClick="@(() => MarkRead(item.Id))" />
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+        </MudStack>
+    }
+}
+
+@code {
+    private List<Notification> _items = [];
+    private bool _loading = true;
+    private int _companyId;
+    private string _userId = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(auth.User);
+            if (user?.CompanyId is null) return;
+            _companyId = user.CompanyId.Value;
+            _userId = user.Id;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _items = await db.Notifications.AsNoTracking()
+                .Where(x => x.CompanyId == _companyId && x.ApplicationUserId == _userId)
+                .OrderBy(x => x.IsRead).ThenByDescending(x => x.CreatedAt)
+                .Take(100).ToListAsync();
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task MarkRead(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var item = await db.Notifications.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == _companyId && x.ApplicationUserId == _userId);
+        if (item is null) return;
+        item.IsRead = true;
+        await db.SaveChangesAsync();
+        await LoadAsync();
+    }
+
+    private async Task MarkAllRead()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var items = await db.Notifications.Where(x => x.CompanyId == _companyId && x.ApplicationUserId == _userId && !x.IsRead).ToListAsync();
+        foreach (var item in items) item.IsRead = true;
+        await db.SaveChangesAsync();
+        await LoadAsync();
+    }
+}
