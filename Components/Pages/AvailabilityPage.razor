@@ -1,0 +1,240 @@
+@page "/availability"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner},{AppRoles.Employee}")]
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+
+<PageTitle>Verfügbarkeiten | StepPilot</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Verfügbarkeiten</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">
+    Lege fest, an welchen Wochentagen und zu welchen Zeiten gearbeitet werden kann. Die automatische Planung berücksichtigt diese Regeln.
+</MudText>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_messageSeverity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+}
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (!_isManager && _ownEmployeeId is null)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+        Deinem Benutzerkonto ist noch kein Mitarbeiterprofil zugeordnet.
+    </MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-5 mb-5" Elevation="1">
+        @if (_isManager)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+                <MudSelect T="int" @bind-Value="_selectedEmployeeId" Label="Mitarbeiter" Variant="Variant.Outlined" Class="flex-grow-1">
+                    @foreach (var employee in _employees)
+                    {
+                        <MudSelectItem T="int" Value="@employee.Id">@employee.FirstName @employee.LastName</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Outlined" OnClick="LoadSelectedEmployee">Laden</MudButton>
+            </MudStack>
+        }
+        else
+        {
+            <MudText Typo="Typo.h6" Class="mb-4">Meine regelmäßige Verfügbarkeit</MudText>
+        }
+
+        <div class="availability-grid">
+            @foreach (var row in _rows)
+            {
+                <div class="availability-row">
+                    <div class="availability-day">@DayName(row.Day)</div>
+                    <label class="availability-check">
+                        <input type="checkbox" @bind="row.IsAvailable" />
+                        verfügbar
+                    </label>
+                    <div>
+                        <label class="availability-label">Von</label>
+                        <input class="availability-time" type="time" @bind="row.From" disabled="@(!row.IsAvailable)" />
+                    </div>
+                    <div>
+                        <label class="availability-label">Bis</label>
+                        <input class="availability-time" type="time" @bind="row.Until" disabled="@(!row.IsAvailable)" />
+                    </div>
+                </div>
+            }
+        </div>
+
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+            Leere Uhrzeiten bedeuten ganztägig verfügbar. Wenn ein Tag deaktiviert ist, wird der Mitarbeiter an diesem Tag nicht automatisch eingeplant.
+        </MudAlert>
+
+        <MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save">
+            Verfügbarkeiten speichern
+        </MudButton>
+    </MudPaper>
+}
+
+@code {
+    private readonly List<AvailabilityRow> _rows = Enum.GetValues<DayOfWeek>()
+        .OrderBy(x => x == DayOfWeek.Sunday ? 7 : (int)x)
+        .Select(x => new AvailabilityRow { Day = x })
+        .ToList();
+
+    private List<Employee> _employees = [];
+    private int _selectedEmployeeId;
+    private int? _ownEmployeeId;
+    private bool _isManager;
+    private bool _loading = true;
+    private string _message = string.Empty;
+    private Severity _messageSeverity = Severity.Success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var principal = auth.User;
+            var user = await UserManager.GetUserAsync(principal);
+
+            if (user?.CompanyId is null)
+                return;
+
+            _isManager = principal.IsInRole(AppRoles.Owner) || principal.IsInRole(AppRoles.Admin) || principal.IsInRole(AppRoles.Planner);
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            if (_isManager)
+            {
+                _employees = await db.Employees.AsNoTracking()
+                    .Where(x => x.CompanyId == user.CompanyId && x.IsActive)
+                    .OrderBy(x => x.LastName).ThenBy(x => x.FirstName)
+                    .ToListAsync();
+
+                _selectedEmployeeId = _employees.FirstOrDefault()?.Id ?? 0;
+                if (_selectedEmployeeId != 0)
+                    await LoadForEmployee(_selectedEmployeeId);
+            }
+            else
+            {
+                _ownEmployeeId = await db.Employees
+                    .Where(x => x.CompanyId == user.CompanyId && x.ApplicationUserId == user.Id)
+                    .Select(x => (int?)x.Id)
+                    .FirstOrDefaultAsync();
+
+                if (_ownEmployeeId is int employeeId)
+                {
+                    _selectedEmployeeId = employeeId;
+                    await LoadForEmployee(employeeId);
+                }
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadSelectedEmployee()
+    {
+        if (_selectedEmployeeId != 0)
+            await LoadForEmployee(_selectedEmployeeId);
+    }
+
+    private async Task LoadForEmployee(int employeeId)
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var exists = await db.Employees.AnyAsync(x => x.Id == employeeId && x.CompanyId == companyId);
+        if (!exists)
+            return;
+
+        var existing = await db.Availabilities.AsNoTracking()
+            .Where(x => x.CompanyId == companyId && x.EmployeeId == employeeId)
+            .ToListAsync();
+
+        foreach (var row in _rows)
+        {
+            var item = existing.FirstOrDefault(x => x.DayOfWeek == row.Day);
+            row.IsAvailable = item?.IsAvailable ?? true;
+            row.From = item?.AvailableFrom?.ToString("HH:mm") ?? string.Empty;
+            row.Until = item?.AvailableUntil?.ToString("HH:mm") ?? string.Empty;
+        }
+
+        _message = string.Empty;
+    }
+
+    private async Task Save()
+    {
+        if (_selectedEmployeeId == 0)
+            return;
+
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var employeeExists = await db.Employees.AnyAsync(x => x.Id == _selectedEmployeeId && x.CompanyId == companyId);
+        if (!employeeExists)
+            return;
+
+        var existing = await db.Availabilities
+            .Where(x => x.CompanyId == companyId && x.EmployeeId == _selectedEmployeeId)
+            .ToListAsync();
+
+        db.Availabilities.RemoveRange(existing);
+
+        foreach (var row in _rows)
+        {
+            db.Availabilities.Add(new Availability
+            {
+                CompanyId = companyId,
+                EmployeeId = _selectedEmployeeId,
+                DayOfWeek = row.Day,
+                IsAvailable = row.IsAvailable,
+                AvailableFrom = ParseTime(row.From),
+                AvailableUntil = ParseTime(row.Until)
+            });
+        }
+
+        await db.SaveChangesAsync();
+        _messageSeverity = Severity.Success;
+        _message = "Verfügbarkeiten wurden gespeichert.";
+    }
+
+    private static TimeOnly? ParseTime(string? value)
+        => TimeOnly.TryParse(value, out var time) ? time : null;
+
+    private static string DayName(DayOfWeek day) => day switch
+    {
+        DayOfWeek.Monday => "Montag",
+        DayOfWeek.Tuesday => "Dienstag",
+        DayOfWeek.Wednesday => "Mittwoch",
+        DayOfWeek.Thursday => "Donnerstag",
+        DayOfWeek.Friday => "Freitag",
+        DayOfWeek.Saturday => "Samstag",
+        DayOfWeek.Sunday => "Sonntag",
+        _ => day.ToString()
+    };
+
+    private sealed class AvailabilityRow
+    {
+        public DayOfWeek Day { get; init; }
+        public bool IsAvailable { get; set; } = true;
+        public string From { get; set; } = string.Empty;
+        public string Until { get; set; } = string.Empty;
+    }
+}
+
+<style>
+    .availability-grid { display: grid; gap: 10px; }
+    .availability-row { display: grid; grid-template-columns: 160px 130px minmax(150px, 1fr) minmax(150px, 1fr); gap: 18px; align-items: end; padding: 14px 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; }
+    .availability-day { font-weight: 600; align-self: center; }
+    .availability-check { display: flex; align-items: center; gap: 8px; align-self: center; }
+    .availability-label { display: block; font-size: .78rem; opacity: .7; margin-bottom: 4px; }
+    .availability-time { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.16); background: transparent; color: inherit; }
+    @@media (max-width: 800px) { .availability-row { grid-template-columns: 1fr 1fr; } }
+</style>
