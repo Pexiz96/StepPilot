@@ -21,73 +21,53 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Absence> Absences => Set<Absence>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<ScheduleChange> ScheduleChanges => Set<ScheduleChange>();
-    public DbSet<EmployeeShiftPreference> EmployeeShiftPreferences
-    => Set<EmployeeShiftPreference>();
+    public DbSet<EmployeeShiftPreference> EmployeeShiftPreferences => Set<EmployeeShiftPreference>();
+    public DbSet<OpenShiftRequest> OpenShiftRequests => Set<OpenShiftRequest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
-        builder.Entity<Company>()
-            .HasIndex(x => x.Slug)
-            .IsUnique();
+        builder.Entity<Company>().HasIndex(x => x.Slug).IsUnique();
 
         builder.Entity<ApplicationUser>()
-            .HasOne(x => x.Company)
-            .WithMany(x => x.Users)
-            .HasForeignKey(x => x.CompanyId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .HasOne(x => x.Company).WithMany(x => x.Users)
+            .HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.Entity<EmployeeQualification>()
-            .HasKey(x => new { x.EmployeeId, x.QualificationId });
-
-        builder.Entity<Employee>()
-            .HasIndex(x => new { x.CompanyId, x.EmployeeNumber })
-            .IsUnique();
-
-        builder.Entity<ShiftAssignment>()
-            .HasIndex(x => new { x.CompanyId, x.ShiftId, x.EmployeeId })
-            .IsUnique();
+        builder.Entity<EmployeeQualification>().HasKey(x => new { x.EmployeeId, x.QualificationId });
+        builder.Entity<Employee>().HasIndex(x => new { x.CompanyId, x.EmployeeNumber }).IsUnique();
+        builder.Entity<ShiftAssignment>().HasIndex(x => new { x.CompanyId, x.ShiftId, x.EmployeeId }).IsUnique();
 
         builder.Entity<Employee>()
-            .HasOne(x => x.ApplicationUser)
-            .WithOne()
-            .HasForeignKey<Employee>(x => x.ApplicationUserId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .HasOne(x => x.ApplicationUser).WithOne()
+            .HasForeignKey<Employee>(x => x.ApplicationUserId).OnDelete(DeleteBehavior.SetNull);
 
         builder.Entity<Location>()
-            .HasOne(x => x.Company)
-            .WithMany()
-            .HasForeignKey(x => x.CompanyId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .HasOne(x => x.Company).WithMany()
+            .HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<Department>()
-            .HasOne(x => x.Company)
-            .WithMany()
-            .HasForeignKey(x => x.CompanyId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .HasOne(x => x.Company).WithMany()
+            .HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.Entity<Employee>()
-            .Property(x => x.WeeklyHours)
-            .HasPrecision(5, 2);
-        builder.Entity<EmployeeShiftPreference>()
-            .HasKey(x => new
-            {
-             x.EmployeeId,
-               x.ShiftTemplateId
-            });
+        builder.Entity<Employee>().Property(x => x.WeeklyHours).HasPrecision(5, 2);
 
+        builder.Entity<EmployeeShiftPreference>().HasKey(x => new { x.EmployeeId, x.ShiftTemplateId });
         builder.Entity<EmployeeShiftPreference>()
-            .HasOne(x => x.Employee)
-            .WithMany(x => x.ShiftPreferences)
-            .HasForeignKey(x => x.EmployeeId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasOne(x => x.Employee).WithMany(x => x.ShiftPreferences)
+            .HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<EmployeeShiftPreference>()
+            .HasOne(x => x.ShiftTemplate).WithMany()
+            .HasForeignKey(x => x.ShiftTemplateId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.Entity<EmployeeShiftPreference>()
-            .HasOne(x => x.ShiftTemplate)
-            .WithMany()
-            .HasForeignKey(x => x.ShiftTemplateId)
-            .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<OpenShiftRequest>()
+            .HasIndex(x => new { x.CompanyId, x.ShiftId, x.EmployeeId })
+            .IsUnique();
+        builder.Entity<OpenShiftRequest>()
+            .HasOne(x => x.Shift).WithMany()
+            .HasForeignKey(x => x.ShiftId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<OpenShiftRequest>()
+            .HasOne(x => x.Employee).WithMany()
+            .HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
     }
 }
-
