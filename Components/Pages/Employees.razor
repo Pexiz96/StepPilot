@@ -1,0 +1,523 @@
+@page "/employees"
+
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+
+@inject EmployeeService EmployeeService
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+
+<PageTitle>Mitarbeiter | StepPilot</PageTitle>
+
+<MudStack Row="true"
+          AlignItems="AlignItems.Center"
+          Class="mb-4">
+
+    <MudText Typo="Typo.h4">
+        Mitarbeiter
+    </MudText>
+
+    <MudSpacer />
+
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               OnClick="NewEmployee">
+        Neu
+    </MudButton>
+
+</MudStack>
+
+
+<MudPaper Class="pa-4 mb-5">
+
+    <MudText Typo="Typo.h6"
+             Class="mb-4">
+        Mitarbeiterdaten
+    </MudText>
+
+    <MudGrid>
+
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="_edit.EmployeeNumber"
+                          Label="Personalnummer"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="_edit.FirstName"
+                          Label="Vorname"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="_edit.LastName"
+                          Label="Nachname"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="3">
+            <MudNumericField T="decimal"
+                             @bind-Value="_edit.WeeklyHours"
+                             Label="Wochenstunden"
+                             Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_edit.Email"
+                          Label="E-Mail"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_edit.PhoneNumber"
+                          Label="Telefon"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_edit.Position"
+                          Label="Position"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+    </MudGrid>
+
+
+    <MudDivider Class="my-5" />
+
+
+    <MudText Typo="Typo.h6">
+        Erlaubte Schichten
+    </MudText>
+
+    <MudText Typo="Typo.body2"
+             Color="Color.Secondary"
+             Class="mb-3">
+
+        Wähle aus, welche Schichtarten dieser Mitarbeiter arbeiten darf.
+        Wenn keine Schicht ausgewählt ist, darf der Mitarbeiter grundsätzlich
+        alle Schichtarten arbeiten.
+
+    </MudText>
+
+
+    @if (_shiftTemplates.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info"
+                  Variant="Variant.Outlined">
+
+            Es wurden noch keine Schichtvorlagen angelegt.
+
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+
+            @foreach (var template in _shiftTemplates)
+            {
+                <MudItem xs="12" sm="6" md="4">
+
+                    <MudPaper Class="pa-3">
+
+                        <div class="d-flex align-items-center gap-2">
+
+                            <input type="checkbox"
+                                   checked="@IsShiftSelected(template.Id)"
+                                   @onchange="@(e => ToggleShift(template.Id, e))" />
+
+                            <div>
+
+                                <MudText Typo="Typo.subtitle1">
+                                    @template.Name
+                                </MudText>
+
+                                <MudText Typo="Typo.body2"
+                                         Color="Color.Secondary">
+
+                                    @template.StartTime.ToString("HH:mm")
+                                    –
+                                    @template.EndTime.ToString("HH:mm")
+
+                                </MudText>
+
+                            </div>
+
+                        </div>
+
+                    </MudPaper>
+
+                </MudItem>
+            }
+
+        </MudGrid>
+    }
+
+
+    <MudButton Class="mt-5"
+               Variant="Variant.Filled"
+               Color="Color.Primary"
+               OnClick="Save">
+
+        Speichern
+
+    </MudButton>
+
+</MudPaper>
+
+
+<MudTable Items="_items"
+          Hover="true"
+          Striped="true">
+
+    <HeaderContent>
+
+        <MudTh>Nr.</MudTh>
+
+        <MudTh>Name</MudTh>
+
+        <MudTh>Position</MudTh>
+
+        <MudTh>Wochenstunden</MudTh>
+
+        <MudTh>Status</MudTh>
+
+        <MudTh>Aktionen</MudTh>
+
+    </HeaderContent>
+
+
+    <RowTemplate>
+
+        <MudTd>
+            @context.EmployeeNumber
+        </MudTd>
+
+        <MudTd>
+            @context.FirstName @context.LastName
+        </MudTd>
+
+        <MudTd>
+            @context.Position
+        </MudTd>
+
+        <MudTd>
+            @context.WeeklyHours
+        </MudTd>
+
+        <MudTd>
+            @(context.IsActive ? "Aktiv" : "Inaktiv")
+        </MudTd>
+
+        <MudTd>
+
+            <MudButton Size="Size.Small"
+                       Variant="Variant.Text"
+                       OnClick="@(() => Edit(context))">
+
+                Bearbeiten
+
+            </MudButton>
+
+            <MudButton Size="Size.Small"
+                       Variant="Variant.Text"
+                       Color="Color.Warning"
+                       OnClick="@(() => ToggleActive(context))">
+
+                @(context.IsActive
+                    ? "Deaktivieren"
+                    : "Aktivieren")
+
+            </MudButton>
+
+        </MudTd>
+
+    </RowTemplate>
+
+</MudTable>
+
+
+@code
+{
+    private List<Employee> _items = [];
+
+    private List<ShiftTemplate> _shiftTemplates = [];
+
+    private HashSet<int> _selectedShiftTemplateIds = [];
+
+    private Employee _edit = new();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadShiftTemplates();
+        await Reload();
+    }
+
+
+    private async Task Reload()
+    {
+        _items =
+            await EmployeeService.GetAllAsync();
+    }
+
+
+    private async Task LoadShiftTemplates()
+    {
+        var companyId =
+            await TenantGuard.RequireCompanyIdAsync();
+
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+        _shiftTemplates =
+            await db.ShiftTemplates
+                .AsNoTracking()
+                .Where(x =>
+                    x.CompanyId == companyId &&
+                    x.IsActive)
+                .OrderBy(x => x.StartTime)
+                .ToListAsync();
+    }
+
+
+    private void NewEmployee()
+    {
+        _edit = new Employee();
+
+        _selectedShiftTemplateIds.Clear();
+    }
+
+
+    private async Task Edit(Employee employee)
+    {
+        _edit = new Employee
+        {
+            Id = employee.Id,
+            CompanyId = employee.CompanyId,
+
+            EmployeeNumber =
+                employee.EmployeeNumber,
+
+            FirstName =
+                employee.FirstName,
+
+            LastName =
+                employee.LastName,
+
+            Email =
+                employee.Email,
+
+            PhoneNumber =
+                employee.PhoneNumber,
+
+            WeeklyHours =
+                employee.WeeklyHours,
+
+            HireDate =
+                employee.HireDate,
+
+            LeaveDate =
+                employee.LeaveDate,
+
+            Position =
+                employee.Position,
+
+            IsActive =
+                employee.IsActive,
+
+            LocationId =
+                employee.LocationId,
+
+            DepartmentId =
+                employee.DepartmentId,
+
+            ApplicationUserId =
+                employee.ApplicationUserId
+        };
+
+
+        await LoadShiftPreferences(employee.Id);
+    }
+
+
+    private async Task LoadShiftPreferences(int employeeId)
+    {
+        var companyId =
+            await TenantGuard.RequireCompanyIdAsync();
+
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+
+        var employeeExists =
+            await db.Employees.AnyAsync(x =>
+                x.Id == employeeId &&
+                x.CompanyId == companyId);
+
+
+        if (!employeeExists)
+        {
+            _selectedShiftTemplateIds.Clear();
+
+            return;
+        }
+
+
+        var ids =
+            await db.EmployeeShiftPreferences
+                .AsNoTracking()
+                .Where(x =>
+                    x.EmployeeId == employeeId &&
+                    x.IsAllowed)
+                .Select(x =>
+                    x.ShiftTemplateId)
+                .ToListAsync();
+
+
+        _selectedShiftTemplateIds =
+            ids.ToHashSet();
+    }
+
+
+    private bool IsShiftSelected(int shiftTemplateId)
+    {
+        return _selectedShiftTemplateIds
+            .Contains(shiftTemplateId);
+    }
+
+
+    private void ToggleShift(
+        int shiftTemplateId,
+        ChangeEventArgs args)
+    {
+        var selected =
+            args.Value is bool value && value;
+
+
+        if (selected)
+        {
+            _selectedShiftTemplateIds
+                .Add(shiftTemplateId);
+        }
+        else
+        {
+            _selectedShiftTemplateIds
+                .Remove(shiftTemplateId);
+        }
+    }
+
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(
+                _edit.EmployeeNumber))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                _edit.FirstName))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                _edit.LastName))
+        {
+            return;
+        }
+
+
+        await EmployeeService.SaveAsync(_edit);
+
+
+        await SaveShiftPreferences();
+
+
+        _edit = new Employee();
+
+        _selectedShiftTemplateIds.Clear();
+
+
+        await Reload();
+    }
+
+
+    private async Task SaveShiftPreferences()
+    {
+        if (_edit.Id == 0)
+        {
+            return;
+        }
+
+
+        var companyId =
+            await TenantGuard.RequireCompanyIdAsync();
+
+
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+
+        var employeeExists =
+            await db.Employees.AnyAsync(x =>
+                x.Id == _edit.Id &&
+                x.CompanyId == companyId);
+
+
+        if (!employeeExists)
+        {
+            return;
+        }
+
+
+        var existing =
+            await db.EmployeeShiftPreferences
+                .Where(x =>
+                    x.EmployeeId == _edit.Id)
+                .ToListAsync();
+
+
+        db.EmployeeShiftPreferences
+            .RemoveRange(existing);
+
+
+        var allowedTemplateIds =
+            await db.ShiftTemplates
+                .Where(x =>
+                    x.CompanyId == companyId &&
+                    _selectedShiftTemplateIds
+                        .Contains(x.Id))
+                .Select(x => x.Id)
+                .ToListAsync();
+
+
+        foreach (var templateId
+                 in allowedTemplateIds)
+        {
+            db.EmployeeShiftPreferences.Add(
+                new EmployeeShiftPreference
+                {
+                    EmployeeId = _edit.Id,
+
+                    ShiftTemplateId =
+                        templateId,
+
+                    IsAllowed = true
+                });
+        }
+
+
+        await db.SaveChangesAsync();
+    }
+
+
+    private async Task ToggleActive(
+        Employee employee)
+    {
+        await EmployeeService
+            .ToggleActiveAsync(employee.Id);
+
+        await Reload();
+    }
+}

@@ -1,0 +1,98 @@
+﻿@using Microsoft.AspNetCore.Identity
+@using StepPilot.Data
+
+@inject SignInManager<ApplicationUser> SignInManager
+
+<MudNavMenu Class="account-nav">
+
+    <MudNavLink Href="Account/Manage"
+                Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Filled.Person">
+        Profil
+    </MudNavLink>
+
+    <MudNavLink Href="Account/Manage/Email"
+                Icon="@Icons.Material.Filled.Email">
+        E-Mail
+    </MudNavLink>
+
+    <MudNavLink Href="Account/Manage/ChangePassword"
+                Icon="@Icons.Material.Filled.Lock">
+        Passwort
+    </MudNavLink>
+
+    @if (hasExternalLogins)
+    {
+        <MudNavLink Href="Account/Manage/ExternalLogins"
+                    Icon="@Icons.Material.Filled.Link">
+            Externe Logins
+        </MudNavLink>
+    }
+
+    <MudNavLink Href="Account/Manage/TwoFactorAuthentication"
+                Icon="@Icons.Material.Filled.Security">
+        Zwei-Faktor-Authentifizierung
+    </MudNavLink>
+
+    <MudNavLink Href="Account/Manage/Passkeys"
+                Icon="@Icons.Material.Filled.Key">
+        Passkeys
+    </MudNavLink>
+
+    <MudNavLink Href="Account/Manage/PersonalData"
+                Icon="@Icons.Material.Filled.Badge">
+        Persönliche Daten
+    </MudNavLink>
+
+    <MudDivider Class="my-4" />
+
+    <form action="/Account/Logout"
+          method="post">
+
+        <AntiforgeryToken />
+
+        <input type="hidden"
+               name="ReturnUrl"
+               value="" />
+
+        <MudButton ButtonType="ButtonType.Submit"
+                   Variant="Variant.Text"
+                   Color="Color.Error"
+                   StartIcon="@Icons.Material.Filled.Logout"
+                   FullWidth="true"
+                   Class="justify-start">
+
+            Abmelden
+
+        </MudButton>
+
+    </form>
+
+</MudNavMenu>
+
+<style>
+
+    .account-nav .mud-nav-link {
+        border-radius: 12px;
+        margin-bottom: 6px;
+        padding: 12px 14px;
+    }
+
+        .account-nav .mud-nav-link.active {
+            background: rgba(124, 92, 255, 0.18);
+        }
+
+</style>
+
+@code
+{
+    private bool hasExternalLogins;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hasExternalLogins =
+            (await SignInManager
+                .GetExternalAuthenticationSchemesAsync())
+                .Any();
+    }
+}

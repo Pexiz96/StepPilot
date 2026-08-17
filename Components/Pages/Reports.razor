@@ -1,0 +1,51 @@
+@page "/reports"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+
+<PageTitle>Auswertungen | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-4">Auswertungen</MudText>
+
+<MudTable Items="_rows">
+    <HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>Sollstunden</MudTh><MudTh>Geplante Stunden</MudTh><MudTh>Differenz</MudTh></HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd><MudTd>@context.Target</MudTd><MudTd>@context.Planned</MudTd><MudTd>@context.Difference</MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Row> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var employees = await db.Employees.AsNoTracking()
+            .Where(x => x.CompanyId == companyId && x.IsActive)
+            .ToListAsync();
+
+        var assignments = await db.ShiftAssignments.AsNoTracking()
+            .Include(x => x.Shift)
+            .Where(x => x.CompanyId == companyId)
+            .ToListAsync();
+
+        _rows = employees.Select(e =>
+        {
+            decimal planned = assignments.Where(a => a.EmployeeId == e.Id && a.Shift is not null)
+                .Sum(a => Hours(a.Shift!));
+
+            return new Row($"{e.FirstName} {e.LastName}", e.WeeklyHours, planned, planned - e.WeeklyHours);
+        }).ToList();
+    }
+
+    private static decimal Hours(Shift shift)
+    {
+        var minutes = (decimal)(shift.EndTime.ToTimeSpan() - shift.StartTime.ToTimeSpan()).TotalMinutes;
+        if (minutes < 0) minutes += 24 * 60;
+        minutes -= shift.BreakMinutes;
+        return Math.Max(0, minutes / 60m);
+    }
+
+    private sealed record Row(string Name, decimal Target, decimal Planned, decimal Difference);
+}

@@ -1,0 +1,160 @@
+@page "/schedule"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+@inject PlanningService PlanningService
+
+<PageTitle>Schichtplanung | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-4">Schichtplanung</MudText>
+
+<MudPaper Class="pa-4 mb-5">
+    <MudDatePicker Label="Wochenbeginn" @bind-Date="_weekStart" />
+    <MudButton Class="ml-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadWeek">Woche laden</MudButton>
+    <MudButton Class="ml-2" Variant="Variant.Outlined" OnClick="CreateSchedule">Wochenplan anlegen</MudButton>
+    @if (_schedule is not null)
+    {
+        <MudButton Class="ml-2" Variant="Variant.Filled" Color="Color.Success" OnClick="AutoPlan">Automatisch planen</MudButton>
+        <MudButton Class="ml-2" Variant="Variant.Filled" Color="Color.Primary" OnClick="Publish">Veröffentlichen</MudButton>
+    }
+</MudPaper>
+
+@if (_schedule is not null)
+{
+    <MudText Typo="Typo.h6" Class="mb-3">
+        Woche ab @_schedule.WeekStart.ToString("dd.MM.yyyy") – Status: @_schedule.Status
+    </MudText>
+
+    <MudPaper Class="pa-4 mb-5">
+        <MudSelect T="int" @bind-Value="_newShift.TemplateId" Label="Schichtvorlage">
+            @foreach (var t in _templates)
+            {
+                <MudSelectItem Value="@t.Id">@t.Name (@t.StartTime.ToString("HH:mm")–@t.EndTime.ToString("HH:mm"))</MudSelectItem>
+            }
+        </MudSelect>
+        <MudDatePicker Label="Datum" @bind-Date="_newShift.Date" Class="mt-3" />
+        <MudNumericField T="int" @bind-Value="_newShift.RequiredEmployees" Label="Benötigte Mitarbeiter" Class="mt-3" />
+        <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="AddShift">Schicht hinzufügen</MudButton>
+    </MudPaper>
+
+    <MudTable Items="_schedule.Shifts.OrderBy(x => x.Date).ThenBy(x => x.StartTime)">
+        <HeaderContent>
+            <MudTh>Datum</MudTh><MudTh>Zeit</MudTh><MudTh>Bedarf</MudTh><MudTh>Zugewiesen</MudTh><MudTh>Aktion</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Date.ToString("dd.MM.yyyy")</MudTd>
+            <MudTd>@context.StartTime.ToString("HH:mm")–@context.EndTime.ToString("HH:mm")</MudTd>
+            <MudTd>@context.RequiredEmployees</MudTd>
+            <MudTd>@context.Assignments.Count</MudTd>
+            <MudTd><MudButton Size="Size.Small" Href="@($"/schedule/shift/{context.Id}")">Besetzen</MudButton></MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private DateTime? _weekStart = DateTime.Today;
+    private Schedule? _schedule;
+    private List<ShiftTemplate> _templates = [];
+    private NewShiftVm _newShift = new() { Date = DateTime.Today, RequiredEmployees = 1 };
+
+    protected override async Task OnInitializedAsync() => await LoadWeek();
+
+    private DateOnly NormalizeMonday(DateTime value)
+    {
+        var d = DateOnly.FromDateTime(value.Date);
+        var delta = (7 + (int)d.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+        return d.AddDays(-delta);
+    }
+
+    private async Task LoadWeek()
+    {
+        if (_weekStart is null) return;
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        var monday = NormalizeMonday(_weekStart.Value);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _schedule = await db.Schedules
+            .Include(x => x.Shifts)
+            .ThenInclude(x => x.Assignments)
+            .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.WeekStart == monday);
+
+        _templates = await db.ShiftTemplates.AsNoTracking()
+            .Where(x => x.CompanyId == companyId && x.IsActive)
+            .OrderBy(x => x.Name)
+            .ToListAsync();
+    }
+
+    private async Task CreateSchedule()
+    {
+        if (_weekStart is null) return;
+
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var monday = NormalizeMonday(_weekStart.Value);
+
+        if (await db.Schedules.AnyAsync(x => x.CompanyId == companyId && x.WeekStart == monday))
+        {
+            await LoadWeek();
+            return;
+        }
+
+        db.Schedules.Add(new Schedule { CompanyId = companyId, WeekStart = monday });
+        await db.SaveChangesAsync();
+        await LoadWeek();
+    }
+
+    private async Task AddShift()
+    {
+        if (_schedule is null || _newShift.Date is null || _newShift.TemplateId == 0) return;
+
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var template = await db.ShiftTemplates.FirstAsync(x => x.Id == _newShift.TemplateId && x.CompanyId == companyId);
+
+        db.Shifts.Add(new Shift
+        {
+            CompanyId = companyId,
+            ScheduleId = _schedule.Id,
+            ShiftTemplateId = template.Id,
+            Date = DateOnly.FromDateTime(_newShift.Date.Value),
+            StartTime = template.StartTime,
+            EndTime = template.EndTime,
+            BreakMinutes = template.BreakMinutes,
+            RequiredEmployees = Math.Max(1, _newShift.RequiredEmployees)
+        });
+
+        await db.SaveChangesAsync();
+        await LoadWeek();
+    }
+
+    private async Task AutoPlan()
+    {
+        if (_schedule is null) return;
+        await PlanningService.AutoPlanAsync(_schedule.Id);
+        await LoadWeek();
+    }
+
+    private async Task Publish()
+    {
+        if (_schedule is null) return;
+
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var schedule = await db.Schedules.FirstAsync(x => x.Id == _schedule.Id && x.CompanyId == companyId);
+        schedule.Status = ScheduleStatus.Published;
+        schedule.PublishedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        await LoadWeek();
+    }
+
+    private sealed class NewShiftVm
+    {
+        public int TemplateId { get; set; }
+        public DateTime? Date { get; set; }
+        public int RequiredEmployees { get; set; }
+    }
+}

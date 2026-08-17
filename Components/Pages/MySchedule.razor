@@ -1,0 +1,46 @@
+@page "/my-schedule"
+@attribute [Authorize]
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<PageTitle>Meine Schichten | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-4">Meine Schichten</MudText>
+
+<MudTable Items="_items">
+    <HeaderContent><MudTh>Datum</MudTh><MudTh>Von</MudTh><MudTh>Bis</MudTh><MudTh>Standort</MudTh></HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Shift?.Date.ToString("dd.MM.yyyy")</MudTd>
+        <MudTd>@context.Shift?.StartTime.ToString("HH:mm")</MudTd>
+        <MudTd>@context.Shift?.EndTime.ToString("HH:mm")</MudTd>
+        <MudTd>@context.Shift?.Location?.Name</MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<ShiftAssignment> _items = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(auth.User);
+        if (user is null || user.CompanyId is null) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var employeeId = await db.Employees
+            .Where(x => x.CompanyId == user.CompanyId && x.ApplicationUserId == user.Id)
+            .Select(x => (int?)x.Id)
+            .FirstOrDefaultAsync();
+
+        if (employeeId is null) return;
+
+        _items = await db.ShiftAssignments.AsNoTracking()
+            .Include(x => x.Shift)
+            .ThenInclude(x => x!.Location)
+            .Where(x => x.CompanyId == user.CompanyId && x.EmployeeId == employeeId)
+            .OrderBy(x => x.Shift!.Date)
+            .ThenBy(x => x.Shift!.StartTime)
+            .ToListAsync();
+    }
+}

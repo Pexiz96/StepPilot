@@ -1,0 +1,94 @@
+@page "/companies/{CompanyId:int}/owner"
+@attribute [Authorize(Roles = AppRoles.SuperAdmin)]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Navigation
+
+<PageTitle>Owner anlegen | StepPilot</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Owner anlegen</MudText>
+
+@if (_company is null)
+{
+    <MudAlert Severity="Severity.Error">Unternehmen wurde nicht gefunden.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-5">
+        <MudText Typo="Typo.h6" Class="mb-4">@_company.Name</MudText>
+
+        <MudTextField @bind-Value="_firstName" Label="Vorname" Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_lastName" Label="Nachname" Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_email" Label="E-Mail" Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_password" Label="Temporäres Passwort" InputType="InputType.Password" Variant="Variant.Outlined" Class="mb-3" />
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
+        }
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateOwner">
+            Owner anlegen
+        </MudButton>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public int CompanyId { get; set; }
+
+    private Company? _company;
+    private string _firstName = "";
+    private string _lastName = "";
+    private string _email = "";
+    private string _password = "";
+    private string _error = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _company = await db.Companies.FirstOrDefaultAsync(x => x.Id == CompanyId);
+    }
+
+    private async Task CreateOwner()
+    {
+        _error = "";
+
+        if (_company is null ||
+            string.IsNullOrWhiteSpace(_firstName) ||
+            string.IsNullOrWhiteSpace(_lastName) ||
+            string.IsNullOrWhiteSpace(_email) ||
+            string.IsNullOrWhiteSpace(_password))
+        {
+            _error = "Bitte alle Felder ausfüllen.";
+            return;
+        }
+
+        if (await UserManager.FindByEmailAsync(_email) is not null)
+        {
+            _error = "Diese E-Mail-Adresse wird bereits verwendet.";
+            return;
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = _email.Trim(),
+            Email = _email.Trim(),
+            EmailConfirmed = true,
+            FirstName = _firstName.Trim(),
+            LastName = _lastName.Trim(),
+            CompanyId = _company.Id,
+            IsActive = true
+        };
+
+        var result = await UserManager.CreateAsync(user, _password);
+
+        if (!result.Succeeded)
+        {
+            _error = string.Join(" ", result.Errors.Select(x => x.Description));
+            return;
+        }
+
+        await UserManager.AddToRoleAsync(user, AppRoles.Owner);
+        Navigation.NavigateTo("/companies");
+    }
+}

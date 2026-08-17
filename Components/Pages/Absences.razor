@@ -1,0 +1,960 @@
+@page "/absences"
+
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner},{AppRoles.Employee}")]
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+
+<PageTitle>Abwesenheiten | StepPilot</PageTitle>
+
+<MudStack Row="true"
+          AlignItems="AlignItems.Center"
+          Class="mb-4">
+
+    <MudText Typo="Typo.h4">
+        Abwesenheiten
+    </MudText>
+
+</MudStack>
+
+
+@if (_loading)
+{
+    <MudPaper Class="pa-8">
+
+        <MudStack AlignItems="AlignItems.Center"
+                  Justify="Justify.Center"
+                  Spacing="3">
+
+            <MudProgressCircular Indeterminate="true"
+                                 Color="Color.Primary"
+                                 Size="Size.Large" />
+
+            <MudText Color="Color.Secondary">
+                Abwesenheiten werden geladen...
+            </MudText>
+
+        </MudStack>
+
+    </MudPaper>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error"
+                  Variant="Variant.Outlined"
+                  Class="mb-4">
+
+            @_errorMessage
+
+        </MudAlert>
+    }
+
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <MudAlert Severity="Severity.Success"
+                  Variant="Variant.Outlined"
+                  Class="mb-4">
+
+            @_successMessage
+
+        </MudAlert>
+    }
+
+
+    @if (!_isManager && _ownEmployee is null)
+    {
+        <MudAlert Severity="Severity.Warning"
+                  Variant="Variant.Outlined">
+
+            Deinem Benutzerkonto ist noch kein Mitarbeiterprofil zugeordnet.
+
+        </MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="pa-5 mb-5"
+                  Elevation="1">
+
+            <MudText Typo="Typo.h6"
+                     Class="mb-1">
+
+                @(_isManager
+                    ? "Abwesenheit erfassen"
+                    : "Urlaub beantragen")
+
+            </MudText>
+
+            <MudText Typo="Typo.body2"
+                     Color="Color.Secondary"
+                     Class="mb-4">
+
+                @(_isManager
+                    ? "Urlaub, Krankheit und weitere Abwesenheiten verwalten."
+                    : "Hier kannst du deinen Urlaub beantragen.")
+
+            </MudText>
+
+
+            @if (_isManager)
+            {
+                <MudSelect T="int"
+                           @bind-Value="_edit.EmployeeId"
+                           Label="Mitarbeiter"
+                           Variant="Variant.Outlined"
+                           FullWidth="true">
+
+                    @foreach (var employee in _employees)
+                    {
+                        <MudSelectItem T="int"
+                                       Value="@employee.Id">
+
+                            @employee.FirstName @employee.LastName
+
+                        </MudSelectItem>
+                    }
+
+                </MudSelect>
+
+
+                <MudSelect T="AbsenceType"
+                           @bind-Value="_edit.Type"
+                           Label="Art der Abwesenheit"
+                           Variant="Variant.Outlined"
+                           FullWidth="true"
+                           Class="mt-3">
+
+                    <MudSelectItem T="AbsenceType"
+                                   Value="@AbsenceType.Vacation">
+                        Urlaub
+                    </MudSelectItem>
+
+                    <MudSelectItem T="AbsenceType"
+                                   Value="@AbsenceType.Sick">
+                        Krankheit
+                    </MudSelectItem>
+
+                    <MudSelectItem T="AbsenceType"
+                                   Value="@AbsenceType.Training">
+                        Weiterbildung
+                    </MudSelectItem>
+
+                    <MudSelectItem T="AbsenceType"
+                                   Value="@AbsenceType.SpecialLeave">
+                        Sonderurlaub
+                    </MudSelectItem>
+
+                    <MudSelectItem T="AbsenceType"
+                                   Value="@AbsenceType.Other">
+                        Sonstige
+                    </MudSelectItem>
+
+                </MudSelect>
+            }
+            else
+            {
+                <MudTextField T="string"
+                              Value="@GetOwnEmployeeName()"
+                              Label="Mitarbeiter"
+                              Variant="Variant.Outlined"
+                              ReadOnly="true" />
+
+                <MudTextField T="string"
+                              Value="@("Urlaub")"
+                              Label="Art"
+                              Variant="Variant.Outlined"
+                              ReadOnly="true"
+                              Class="mt-3" />
+            }
+
+
+            <MudGrid Class="mt-2">
+
+                <MudItem xs="12"
+                         md="6">
+
+                    <MudDatePicker Label="Von"
+                                   @bind-Date="_from"
+                                   Variant="Variant.Outlined"
+                                   DateFormat="dd.MM.yyyy"
+                                   FullWidth="true" />
+
+                </MudItem>
+
+
+                <MudItem xs="12"
+                         md="6">
+
+                    <MudDatePicker Label="Bis"
+                                   @bind-Date="_to"
+                                   Variant="Variant.Outlined"
+                                   DateFormat="dd.MM.yyyy"
+                                   FullWidth="true" />
+
+                </MudItem>
+
+            </MudGrid>
+
+
+            <MudTextField @bind-Value="_edit.Reason"
+                          Label="Bemerkung"
+                          Variant="Variant.Outlined"
+                          Lines="3"
+                          FullWidth="true"
+                          Class="mt-3" />
+
+
+            <MudButton Class="mt-4"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="Save">
+
+                @(_isManager
+                    ? "Abwesenheit speichern"
+                    : "Urlaub beantragen")
+
+            </MudButton>
+
+        </MudPaper>
+
+
+        <MudStack Row="true"
+                  AlignItems="AlignItems.Center"
+                  Class="mb-3">
+
+            <MudText Typo="Typo.h5">
+
+                @(_isManager
+                    ? "Abwesenheiten"
+                    : "Meine Abwesenheiten")
+
+            </MudText>
+
+            <MudSpacer />
+
+            <MudChip T="string"
+                     Color="Color.Primary"
+                     Variant="Variant.Outlined">
+
+                @_items.Count Einträge
+
+            </MudChip>
+
+        </MudStack>
+
+
+        <MudTable Items="_items"
+                  Hover="true"
+                  Striped="true"
+                  Breakpoint="Breakpoint.Sm"
+                  Elevation="1">
+
+            <HeaderContent>
+
+                <MudTh>Mitarbeiter</MudTh>
+                <MudTh>Art</MudTh>
+                <MudTh>Von</MudTh>
+                <MudTh>Bis</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Bemerkung</MudTh>
+
+                @if (_isManager)
+                {
+                    <MudTh>Aktionen</MudTh>
+                }
+
+            </HeaderContent>
+
+
+            <RowTemplate>
+
+                <MudTd DataLabel="Mitarbeiter">
+
+                    @context.Employee?.FirstName
+                    @context.Employee?.LastName
+
+                </MudTd>
+
+
+                <MudTd DataLabel="Art">
+
+                    @GetAbsenceTypeText(context.Type)
+
+                </MudTd>
+
+
+                <MudTd DataLabel="Von">
+
+                    @context.StartDate.ToString("dd.MM.yyyy")
+
+                </MudTd>
+
+
+                <MudTd DataLabel="Bis">
+
+                    @context.EndDate.ToString("dd.MM.yyyy")
+
+                </MudTd>
+
+
+                <MudTd DataLabel="Status">
+
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@GetStatusColor(context.Status)"
+                             Variant="Variant.Filled">
+
+                        @GetStatusText(context.Status)
+
+                    </MudChip>
+
+                </MudTd>
+
+
+                <MudTd DataLabel="Bemerkung">
+
+                    @(string.IsNullOrWhiteSpace(context.Reason)
+                        ? "–"
+                        : context.Reason)
+
+                </MudTd>
+
+
+                @if (_isManager)
+                {
+                    <MudTd DataLabel="Aktionen">
+
+                        @if (context.Status == AbsenceStatus.Requested)
+                        {
+                            <MudStack Row="true"
+                                      Spacing="1">
+
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Success"
+                                           StartIcon="@Icons.Material.Filled.Check"
+                                           OnClick="@(() => Approve(context.Id))">
+
+                                    Genehmigen
+
+                                </MudButton>
+
+
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Outlined"
+                                           Color="Color.Error"
+                                           StartIcon="@Icons.Material.Filled.Close"
+                                           OnClick="@(() => Reject(context.Id))">
+
+                                    Ablehnen
+
+                                </MudButton>
+
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2"
+                                     Color="Color.Secondary">
+
+                                Bearbeitet
+
+                            </MudText>
+                        }
+
+                    </MudTd>
+                }
+
+            </RowTemplate>
+
+
+            <NoRecordsContent>
+
+                <MudText Class="pa-4"
+                         Color="Color.Secondary">
+
+                    Noch keine Abwesenheiten vorhanden.
+
+                </MudText>
+
+            </NoRecordsContent>
+
+        </MudTable>
+    }
+}
+
+
+@code
+{
+    private List<Employee> _employees = [];
+
+    private List<Absence> _items = [];
+
+    private Employee? _ownEmployee;
+
+    private Absence _edit = new();
+
+    private DateTime? _from = DateTime.Today;
+
+    private DateTime? _to = DateTime.Today;
+
+    private bool _isManager;
+
+    private bool _isEmployee;
+
+    private bool _loading = true;
+
+    private bool _hasCompany;
+
+    private string _errorMessage = string.Empty;
+
+    private string _successMessage = string.Empty;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadCurrentUser();   // 🔴 Breakpoint 1
+
+            if (_hasCompany)
+            {
+                await Reload();        // 🔴 Breakpoint 2
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage =
+                $"Abwesenheiten konnten nicht geladen werden: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;          // 🔴 Breakpoint 3
+        }
+    }
+
+
+    private async Task LoadCurrentUser()
+    {
+        var authState =
+            await AuthenticationStateProvider
+                .GetAuthenticationStateAsync();
+
+        var principal = authState.User;
+
+        if (principal.Identity?.IsAuthenticated != true)
+        {
+            _errorMessage =
+                "Du bist nicht angemeldet.";
+
+            return;
+        }
+
+        var applicationUser =
+            await UserManager.GetUserAsync(principal);
+
+        if (applicationUser is null)
+        {
+            _errorMessage =
+                "Der angemeldete Benutzer konnte nicht geladen werden.";
+
+            return;
+        }
+
+        _hasCompany =
+            applicationUser.CompanyId is not null;
+
+        if (!_hasCompany)
+        {
+            _errorMessage =
+                "Deinem Benutzerkonto ist kein Unternehmen zugeordnet.";
+
+            return;
+        }
+
+        // Rollen direkt aus dem angemeldeten ClaimsPrincipal lesen.
+        // Dadurch benötigen wir hier keine zusätzlichen Datenbankabfragen
+        // über UserManager.IsInRoleAsync().
+        var isOwner =
+            principal.IsInRole(AppRoles.Owner);
+
+        var isAdmin =
+            principal.IsInRole(AppRoles.Admin);
+
+        var isPlanner =
+            principal.IsInRole(AppRoles.Planner);
+
+        _isEmployee =
+            principal.IsInRole(AppRoles.Employee);
+
+        _isManager =
+            isOwner ||
+            isAdmin ||
+            isPlanner;
+
+        // Nur normale Mitarbeiter benötigen ein verknüpftes Employee-Profil.
+        if (!_isManager && _isEmployee)
+        {
+            await using var db =
+                await DbFactory.CreateDbContextAsync();
+
+            _ownEmployee =
+                await db.Employees
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x =>
+                        x.CompanyId == applicationUser.CompanyId &&
+                        x.ApplicationUserId == applicationUser.Id);
+
+            if (_ownEmployee is not null)
+            {
+                _edit.EmployeeId =
+                    _ownEmployee.Id;
+
+                _edit.Type =
+                    AbsenceType.Vacation;
+            }
+        }
+    }
+
+
+    private async Task Reload()
+    {
+        var companyId =
+            await TenantGuard.RequireCompanyIdAsync();
+
+
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+
+        if (_isManager)
+        {
+            _employees =
+                await db.Employees
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.CompanyId == companyId &&
+                        x.IsActive)
+                    .OrderBy(x =>
+                        x.LastName)
+                    .ThenBy(x =>
+                        x.FirstName)
+                    .ToListAsync();
+
+
+            _items =
+                await db.Absences
+                    .AsNoTracking()
+                    .Include(x =>
+                        x.Employee)
+                    .Where(x =>
+                        x.CompanyId == companyId)
+                    .OrderByDescending(x =>
+                        x.StartDate)
+                    .ThenBy(x =>
+                        x.Employee!.LastName)
+                    .ToListAsync();
+        }
+        else if (_ownEmployee is not null)
+        {
+            _items =
+                await db.Absences
+                    .AsNoTracking()
+                    .Include(x =>
+                        x.Employee)
+                    .Where(x =>
+                        x.CompanyId == companyId &&
+                        x.EmployeeId ==
+                            _ownEmployee.Id)
+                    .OrderByDescending(x =>
+                        x.StartDate)
+                    .ToListAsync();
+        }
+    }
+
+
+    private async Task Save()
+    {
+        ClearMessages();
+
+
+        if (_from is null ||
+            _to is null)
+        {
+            _errorMessage =
+                "Bitte Start- und Enddatum auswählen.";
+
+            return;
+        }
+
+
+        if (_from.Value.Date >
+            _to.Value.Date)
+        {
+            _errorMessage =
+                "Das Enddatum darf nicht vor dem Startdatum liegen.";
+
+            return;
+        }
+
+
+        if (_isEmployee &&
+            !_isManager)
+        {
+            if (_ownEmployee is null)
+            {
+                _errorMessage =
+                    "Es wurde kein Mitarbeiterprofil gefunden.";
+
+                return;
+            }
+
+
+            _edit.EmployeeId =
+                _ownEmployee.Id;
+
+            _edit.Type =
+                AbsenceType.Vacation;
+        }
+
+
+        if (_edit.EmployeeId == 0)
+        {
+            _errorMessage =
+                "Bitte einen Mitarbeiter auswählen.";
+
+            return;
+        }
+
+
+        var companyId =
+            await TenantGuard.RequireCompanyIdAsync();
+
+
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+
+        var employeeExists =
+            await db.Employees.AnyAsync(x =>
+                x.Id == _edit.EmployeeId &&
+                x.CompanyId == companyId);
+
+
+        if (!employeeExists)
+        {
+            _errorMessage =
+                "Der Mitarbeiter wurde nicht gefunden.";
+
+            return;
+        }
+
+
+        var startDate =
+            DateOnly.FromDateTime(
+                _from.Value);
+
+
+        var endDate =
+            DateOnly.FromDateTime(
+                _to.Value);
+
+
+        var overlapExists =
+            await db.Absences.AnyAsync(x =>
+                x.CompanyId == companyId &&
+                x.EmployeeId ==
+                    _edit.EmployeeId &&
+                x.Status !=
+                    AbsenceStatus.Rejected &&
+                x.StartDate <= endDate &&
+                x.EndDate >= startDate);
+
+
+        if (overlapExists)
+        {
+            _errorMessage =
+                "Für diesen Zeitraum existiert bereits eine Abwesenheit.";
+
+            return;
+        }
+
+
+        var absence =
+            new Absence
+            {
+                CompanyId =
+                    companyId,
+
+                EmployeeId =
+                    _edit.EmployeeId,
+
+                Type =
+                    _edit.Type,
+
+                StartDate =
+                    startDate,
+
+                EndDate =
+                    endDate,
+
+                Reason =
+                    _edit.Reason?.Trim(),
+
+                CreatedAt =
+                    DateTime.UtcNow,
+
+                Status =
+                    _edit.Type ==
+                    AbsenceType.Vacation
+
+                        ? AbsenceStatus.Requested
+
+                        : AbsenceStatus.Approved
+            };
+
+
+        db.Absences.Add(
+            absence);
+
+
+        await db.SaveChangesAsync();
+
+
+        _successMessage =
+            absence.Status ==
+            AbsenceStatus.Requested
+
+                ? "Der Urlaubsantrag wurde gespeichert und wartet auf Genehmigung."
+
+                : "Die Abwesenheit wurde gespeichert.";
+
+
+        ResetForm();
+
+        await Reload();
+    }
+
+
+    private async Task Approve(
+        int absenceId)
+    {
+        if (!_isManager)
+        {
+            return;
+        }
+
+
+        ClearMessages();
+
+
+        var companyId =
+            await TenantGuard.RequireCompanyIdAsync();
+
+
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+
+        var absence =
+            await db.Absences
+                .FirstOrDefaultAsync(x =>
+                    x.Id == absenceId &&
+                    x.CompanyId ==
+                        companyId);
+
+
+        if (absence is null)
+        {
+            _errorMessage =
+                "Der Antrag wurde nicht gefunden.";
+
+            return;
+        }
+
+
+        absence.Status =
+            AbsenceStatus.Approved;
+
+
+        await db.SaveChangesAsync();
+
+
+        _successMessage =
+            "Der Urlaubsantrag wurde genehmigt.";
+
+
+        await Reload();
+    }
+
+
+    private async Task Reject(
+        int absenceId)
+    {
+        if (!_isManager)
+        {
+            return;
+        }
+
+
+        ClearMessages();
+
+
+        var companyId =
+            await TenantGuard.RequireCompanyIdAsync();
+
+
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+
+        var absence =
+            await db.Absences
+                .FirstOrDefaultAsync(x =>
+                    x.Id == absenceId &&
+                    x.CompanyId ==
+                        companyId);
+
+
+        if (absence is null)
+        {
+            _errorMessage =
+                "Der Antrag wurde nicht gefunden.";
+
+            return;
+        }
+
+
+        absence.Status =
+            AbsenceStatus.Rejected;
+
+
+        await db.SaveChangesAsync();
+
+
+        _successMessage =
+            "Der Urlaubsantrag wurde abgelehnt.";
+
+
+        await Reload();
+    }
+
+
+    private void ResetForm()
+    {
+        _edit =
+            new Absence();
+
+
+        if (_isEmployee &&
+            !_isManager &&
+            _ownEmployee is not null)
+        {
+            _edit.EmployeeId =
+                _ownEmployee.Id;
+
+            _edit.Type =
+                AbsenceType.Vacation;
+        }
+
+
+        _from =
+            DateTime.Today;
+
+        _to =
+            DateTime.Today;
+    }
+
+
+    private void ClearMessages()
+    {
+        _errorMessage =
+            string.Empty;
+
+        _successMessage =
+            string.Empty;
+    }
+
+
+    private string GetOwnEmployeeName()
+    {
+        if (_ownEmployee is null)
+        {
+            return string.Empty;
+        }
+
+        return
+            $"{_ownEmployee.FirstName} {_ownEmployee.LastName}";
+    }
+
+
+    private static string GetAbsenceTypeText(
+        AbsenceType type)
+    {
+        return type switch
+        {
+            AbsenceType.Vacation =>
+                "Urlaub",
+
+            AbsenceType.Sick =>
+                "Krankheit",
+
+            AbsenceType.Training =>
+                "Weiterbildung",
+
+            AbsenceType.SpecialLeave =>
+                "Sonderurlaub",
+
+            AbsenceType.Other =>
+                "Sonstige",
+
+            _ =>
+                type.ToString()
+        };
+    }
+
+
+    private static string GetStatusText(
+        AbsenceStatus status)
+    {
+        return status switch
+        {
+            AbsenceStatus.Requested =>
+                "Beantragt",
+
+            AbsenceStatus.Approved =>
+                "Genehmigt",
+
+            AbsenceStatus.Rejected =>
+                "Abgelehnt",
+
+            _ =>
+                status.ToString()
+        };
+    }
+
+
+    private static Color GetStatusColor(
+        AbsenceStatus status)
+    {
+        return status switch
+        {
+            AbsenceStatus.Requested =>
+                Color.Warning,
+
+            AbsenceStatus.Approved =>
+                Color.Success,
+
+            AbsenceStatus.Rejected =>
+                Color.Error,
+
+            _ =>
+                Color.Default
+        };
+    }
+}

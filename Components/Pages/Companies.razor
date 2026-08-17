@@ -1,0 +1,78 @@
+@page "/companies"
+@attribute [Authorize(Roles = AppRoles.SuperAdmin)]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<PageTitle>Unternehmen | StepPilot</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Unternehmen</MudText>
+
+<MudPaper Class="pa-4 mb-6">
+    <MudTextField @bind-Value="_edit.Name" Label="Unternehmensname" Variant="Variant.Outlined" Class="mb-3" />
+    <MudTextField @bind-Value="_edit.Slug" Label="Kurzname" Variant="Variant.Outlined" Class="mb-3" />
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">
+        Unternehmen speichern
+    </MudButton>
+</MudPaper>
+
+<MudTable Items="_items" Hover="true">
+    <HeaderContent>
+        <MudTh>Name</MudTh><MudTh>Kurzname</MudTh><MudTh>Status</MudTh><MudTh>Aktionen</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@context.Slug</MudTd>
+        <MudTd>@(context.IsActive ? "Aktiv" : "Inaktiv")</MudTd>
+        <MudTd>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Edit(context))">Bearbeiten</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"/companies/{context.Id}/owner")">Owner anlegen</MudButton>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Company> _items = [];
+    private Company _edit = new();
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _items = await db.Companies.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
+    }
+
+    private void Edit(Company company) => _edit = new Company
+    {
+        Id = company.Id,
+        Name = company.Name,
+        Slug = company.Slug,
+        IsActive = company.IsActive,
+        CreatedAt = company.CreatedAt
+    };
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_edit.Name) || string.IsNullOrWhiteSpace(_edit.Slug))
+            return;
+
+        _edit.Name = _edit.Name.Trim();
+        _edit.Slug = _edit.Slug.Trim().ToLowerInvariant().Replace(" ", "-");
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (_edit.Id == 0)
+            db.Companies.Add(_edit);
+        else
+        {
+            var existing = await db.Companies.FirstAsync(x => x.Id == _edit.Id);
+            existing.Name = _edit.Name;
+            existing.Slug = _edit.Slug;
+            existing.IsActive = _edit.IsActive;
+        }
+
+        await db.SaveChangesAsync();
+        _edit = new Company();
+        await Reload();
+    }
+}

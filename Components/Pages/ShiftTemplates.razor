@@ -1,0 +1,56 @@
+@page "/shift-templates"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+
+<PageTitle>Schichtvorlagen | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-4">Schichtvorlagen</MudText>
+
+<MudPaper Class="pa-4 mb-5">
+    <MudTextField @bind-Value="_edit.Name" Label="Name" Variant="Variant.Outlined" Class="mb-3" />
+    <MudTimePicker @bind-Time="_start" Label="Start" Class="mb-3" />
+    <MudTimePicker @bind-Time="_end" Label="Ende" Class="mb-3" />
+    <MudNumericField T="int" @bind-Value="_edit.BreakMinutes" Label="Pause (Minuten)" Variant="Variant.Outlined" Class="mb-3" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Speichern</MudButton>
+</MudPaper>
+
+<MudTable Items="_items">
+    <HeaderContent><MudTh>Name</MudTh><MudTh>Von</MudTh><MudTh>Bis</MudTh><MudTh>Pause</MudTh></HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd><MudTd>@context.StartTime.ToString("HH:mm")</MudTd><MudTd>@context.EndTime.ToString("HH:mm")</MudTd><MudTd>@context.BreakMinutes min</MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<ShiftTemplate> _items = [];
+    private ShiftTemplate _edit = new();
+    private TimeSpan? _start = TimeSpan.FromHours(6);
+    private TimeSpan? _end = TimeSpan.FromHours(14);
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _items = await db.ShiftTemplates.AsNoTracking().Where(x => x.CompanyId == companyId).OrderBy(x => x.Name).ToListAsync();
+    }
+
+    private async Task Save()
+    {
+        if (_start is null || _end is null) return;
+
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _edit.CompanyId = companyId;
+        _edit.StartTime = TimeOnly.FromTimeSpan(_start.Value);
+        _edit.EndTime = TimeOnly.FromTimeSpan(_end.Value);
+
+        db.ShiftTemplates.Add(_edit);
+        await db.SaveChangesAsync();
+
+        _edit = new ShiftTemplate();
+        await Reload();
+    }
+}

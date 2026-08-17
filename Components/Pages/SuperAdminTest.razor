@@ -1,0 +1,40 @@
+@page "/superadmin/test"
+@attribute [Authorize(Roles = AppRoles.SuperAdmin)]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject DemoDataService DemoData
+
+<PageTitle>Testbereich | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-4">SuperAdmin Testbereich</MudText>
+
+<MudAlert Severity="Severity.Warning" Class="mb-4">
+    Nur für Demo- und Testdaten verwenden.
+</MudAlert>
+
+<MudSelect T="int" @bind-Value="_companyId" Label="Unternehmen">
+    @foreach (var c in _companies)
+    {
+        <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
+    }
+</MudSelect>
+
+<MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" OnClick="Seed">
+    Demo-Daten erzeugen
+</MudButton>
+
+@code {
+    private List<Company> _companies = [];
+    private int _companyId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _companies = await db.Companies.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
+        _companyId = _companies.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private async Task Seed()
+    {
+        if (_companyId != 0)
+            await DemoData.SeedAsync(_companyId);
+    }
+}

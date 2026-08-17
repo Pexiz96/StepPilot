@@ -1,0 +1,57 @@
+@page "/locations"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+
+<PageTitle>Standorte | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-4">Standorte</MudText>
+
+<MudPaper Class="pa-4 mb-5">
+    <MudTextField @bind-Value="_edit.Name" Label="Name" Variant="Variant.Outlined" Class="mb-3" />
+    <MudTextField @bind-Value="_edit.AddressLine" Label="Straße" Variant="Variant.Outlined" Class="mb-3" />
+    <MudTextField @bind-Value="_edit.PostalCode" Label="PLZ" Variant="Variant.Outlined" Class="mb-3" />
+    <MudTextField @bind-Value="_edit.City" Label="Ort" Variant="Variant.Outlined" Class="mb-3" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Speichern</MudButton>
+</MudPaper>
+
+<MudTable Items="_items">
+    <HeaderContent><MudTh>Name</MudTh><MudTh>Ort</MudTh><MudTh>Status</MudTh><MudTh>Aktionen</MudTh></HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd><MudTd>@context.City</MudTd><MudTd>@(context.IsActive ? "Aktiv" : "Inaktiv")</MudTd>
+        <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Edit(context))">Bearbeiten</MudButton></MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Location> _items = [];
+    private Location _edit = new();
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _items = await db.Locations.AsNoTracking().Where(x => x.CompanyId == companyId).OrderBy(x => x.Name).ToListAsync();
+    }
+
+    private void Edit(Location x) => _edit = new Location { Id = x.Id, CompanyId = x.CompanyId, Name = x.Name, AddressLine = x.AddressLine, PostalCode = x.PostalCode, City = x.City, IsActive = x.IsActive };
+
+    private async Task Save()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _edit.CompanyId = companyId;
+
+        if (_edit.Id == 0) db.Locations.Add(_edit);
+        else
+        {
+            var existing = await db.Locations.FirstAsync(x => x.Id == _edit.Id && x.CompanyId == companyId);
+            db.Entry(existing).CurrentValues.SetValues(_edit);
+        }
+
+        await db.SaveChangesAsync();
+        _edit = new Location();
+        await Reload();
+    }
+}

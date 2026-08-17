@@ -1,0 +1,119 @@
+@page "/schedule/shift/{ShiftId:int}"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+@inject PlanningService PlanningService
+
+<PageTitle>Schicht besetzen | StepPilot</PageTitle>
+
+@if (_shift is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudText Typo="Typo.h4">Schicht besetzen</MudText>
+    <MudText Class="mb-4">@_shift.Date.ToString("dd.MM.yyyy") @_shift.StartTime.ToString("HH:mm")–@_shift.EndTime.ToString("HH:mm")</MudText>
+
+    @if (_messages.Count > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3">
+            @foreach (var m in _messages)
+            {
+                <div>@m</div>
+            }
+        </MudAlert>
+    }
+
+    <MudSelect T="int" @bind-Value="_employeeId" Label="Mitarbeiter">
+        @foreach (var e in _employees)
+        {
+            <MudSelectItem Value="@e.Id">@e.FirstName @e.LastName</MudSelectItem>
+        }
+    </MudSelect>
+
+    <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="Assign">Zuweisen</MudButton>
+    <MudButton Class="mt-3 ml-2" Variant="Variant.Outlined" OnClick="LoadReplacementCandidates">Ersatzvorschläge</MudButton>
+
+    <MudTable Items="_shift.Assignments" Class="mt-5">
+        <HeaderContent><MudTh>Zugewiesen</MudTh></HeaderContent>
+        <RowTemplate><MudTd>@context.Employee?.FirstName @context.Employee?.LastName</MudTd></RowTemplate>
+    </MudTable>
+
+    @if (_replacements.Count > 0)
+    {
+        <MudText Typo="Typo.h6" Class="mt-5">
+            Ersatzvorschläge
+        </MudText>
+
+        <MudStack Spacing="2" Class="mt-3">
+            @foreach (var employee in _replacements)
+            {
+                <MudPaper Class="pa-3">
+                    <MudText>
+                        @employee.FirstName @employee.LastName
+                    </MudText>
+                </MudPaper>
+            }
+        </MudStack>
+    }
+}
+
+@code {
+    [Parameter] public int ShiftId { get; set; }
+
+    private Shift? _shift;
+    private List<Employee> _employees = [];
+    private List<Employee> _replacements = [];
+    private int _employeeId;
+    private List<string> _messages = [];
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _shift = await db.Shifts
+            .Include(x => x.Assignments)
+            .ThenInclude(x => x.Employee)
+            .FirstOrDefaultAsync(x => x.Id == ShiftId && x.CompanyId == companyId);
+
+        _employees = await db.Employees.AsNoTracking()
+            .Where(x => x.CompanyId == companyId && x.IsActive)
+            .OrderBy(x => x.LastName)
+            .ToListAsync();
+    }
+
+    private async Task Assign()
+    {
+        if (_employeeId == 0 || _shift is null) return;
+
+        _messages = await PlanningService.ValidateAssignmentAsync(_employeeId, _shift.Id);
+
+        if (_messages.Count > 0) return;
+
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (!await db.ShiftAssignments.AnyAsync(x => x.CompanyId == companyId && x.ShiftId == _shift.Id && x.EmployeeId == _employeeId))
+        {
+            db.ShiftAssignments.Add(new ShiftAssignment
+            {
+                CompanyId = companyId,
+                ShiftId = _shift.Id,
+                EmployeeId = _employeeId
+            });
+
+            await db.SaveChangesAsync();
+        }
+
+        await Reload();
+    }
+
+    private async Task LoadReplacementCandidates()
+    {
+        _replacements = await PlanningService.FindReplacementCandidatesAsync(ShiftId);
+    }
+}

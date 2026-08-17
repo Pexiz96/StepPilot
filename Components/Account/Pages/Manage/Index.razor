@@ -1,0 +1,487 @@
+﻿@page "/Account/Manage"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using StepPilot.Data
+
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Profil | StepPilot</PageTitle>
+
+<div class="profile-page">
+
+    <div class="profile-title">
+
+        <div class="profile-title-icon">
+            <span class="material-symbol">
+                👤
+            </span>
+        </div>
+
+        <div>
+            <h2>Profil</h2>
+
+            <p>
+                Verwalte deine persönlichen Kontoinformationen.
+            </p>
+        </div>
+
+    </div>
+
+
+    <StatusMessage />
+
+
+    <EditForm Model="Input"
+              FormName="profile"
+              OnValidSubmit="OnValidSubmitAsync"
+              method="post"
+              class="profile-form">
+
+        <DataAnnotationsValidator />
+
+        <ValidationSummary class="profile-validation"
+                           role="alert" />
+
+
+        <!-- E-Mail / Benutzername -->
+
+        <div class="profile-field">
+
+            <label for="username">
+                Benutzername / E-Mail
+            </label>
+
+            <div class="profile-input-wrapper">
+
+                <span class="profile-input-icon">
+                    ✉
+                </span>
+
+                <input type="text"
+                       value="@username"
+                       id="username"
+                       class="profile-input"
+                       disabled />
+
+            </div>
+
+            <span class="profile-hint">
+                Dein Benutzername wird für die Anmeldung verwendet.
+            </span>
+
+        </div>
+
+
+        <!-- Telefonnummer -->
+
+        <div class="profile-field">
+
+            <label for="Input.PhoneNumber">
+                Telefonnummer
+            </label>
+
+            <div class="profile-input-wrapper">
+
+                <span class="profile-input-icon">
+                    ☎
+                </span>
+
+                <InputText @bind-Value="Input.PhoneNumber"
+                           id="Input.PhoneNumber"
+                           class="profile-input"
+                           placeholder="Telefonnummer eingeben" />
+
+            </div>
+
+            <ValidationMessage For="() => Input.PhoneNumber"
+                               class="profile-validation-message" />
+
+        </div>
+
+
+        <button type="submit"
+                class="profile-save-button">
+
+            <span class="save-icon">
+                ✓
+            </span>
+
+            Änderungen speichern
+
+        </button>
+
+    </EditForm>
+
+
+    <div class="profile-security">
+
+        <div class="security-icon">
+            ✓
+        </div>
+
+        <div>
+
+            <strong>
+                Dein Konto ist geschützt
+            </strong>
+
+            <p>
+                Passwort, Zwei-Faktor-Authentifizierung und Passkeys
+                kannst du über die Kontonavigation verwalten.
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<style>
+
+    .profile-page {
+        width: 100%;
+    }
+
+
+    /* Überschrift */
+
+    .profile-title {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 22px;
+        margin-bottom: 28px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+
+    .profile-title-icon {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+        background: linear-gradient( 135deg, #6757ff, #9d4edd );
+        font-size: 22px;
+    }
+
+
+    .profile-title h2 {
+        margin: 0;
+        font-size: 27px;
+        font-weight: 600;
+    }
+
+
+    .profile-title p {
+        margin: 4px 0 0;
+        opacity: 0.65;
+        font-size: 14px;
+    }
+
+
+    /* Formular */
+
+    .profile-form {
+        width: 100%;
+        max-width: 760px;
+    }
+
+
+    .profile-field {
+        margin-bottom: 26px;
+    }
+
+
+        .profile-field label {
+            display: block;
+            margin-bottom: 9px;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0.8;
+        }
+
+
+    .profile-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+
+    .profile-input-icon {
+        position: absolute;
+        left: 17px;
+        z-index: 2;
+        font-size: 19px;
+        opacity: 0.55;
+        pointer-events: none;
+    }
+
+
+    .profile-input {
+        width: 100%;
+        height: 58px;
+        padding: 0 18px 0 52px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.025);
+        color: inherit;
+        font-size: 16px;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+
+        .profile-input:focus {
+            border-color: #7b61ff;
+            box-shadow: 0 0 0 3px rgba(123, 97, 255, 0.15);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+
+        .profile-input:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+
+    .profile-hint {
+        display: block;
+        margin-top: 7px;
+        font-size: 12px;
+        opacity: 0.5;
+    }
+
+
+    /* Speichern */
+
+    .profile-save-button {
+        width: 100%;
+        min-height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 12px;
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        background: linear-gradient( 90deg, #645cff, #9146e8 );
+        box-shadow: 0 8px 24px rgba(103, 87, 255, 0.18);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+
+        .profile-save-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 28px rgba(103, 87, 255, 0.28);
+        }
+
+
+        .profile-save-button:active {
+            transform: translateY(0);
+        }
+
+
+    .save-icon {
+        font-size: 18px;
+    }
+
+
+    /* Sicherheitshinweis */
+
+    .profile-security {
+        max-width: 760px;
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+        margin-top: 30px;
+        padding: 18px;
+        border-radius: 12px;
+        border: 1px solid rgba(80, 120, 255, 0.25);
+        background: rgba(50, 80, 180, 0.05);
+    }
+
+
+    .security-icon {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        color: #8b7cff;
+        background: rgba(110, 90, 255, 0.16);
+        font-weight: bold;
+    }
+
+
+    .profile-security strong {
+        font-size: 15px;
+    }
+
+
+    .profile-security p {
+        margin: 5px 0 0;
+        font-size: 13px;
+        opacity: 0.6;
+        line-height: 1.5;
+    }
+
+
+    /* Validierung */
+
+    .profile-validation {
+        margin-bottom: 20px;
+        color: #ff6b6b;
+    }
+
+
+    .profile-validation-message {
+        display: block;
+        margin-top: 6px;
+        color: #ff6b6b;
+        font-size: 12px;
+    }
+
+
+    /* Mobile */
+
+    @@media (max-width: 700px) {
+
+        .profile-title {
+            align-items: flex-start;
+        }
+
+
+            .profile-title h2 {
+                font-size: 23px;
+            }
+
+
+        .profile-input {
+            height: 54px;
+        }
+    }
+
+</style>
+
+
+@code {
+
+    private ApplicationUser? user;
+
+    private string? username;
+
+    private string? phoneNumber;
+
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; }
+        = default!;
+
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; }
+        = default!;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+
+        user =
+            await UserManager
+                .GetUserAsync(
+                    HttpContext.User);
+
+
+        if (user is null)
+        {
+            RedirectManager
+                .RedirectToInvalidUser(
+                    UserManager,
+                    HttpContext);
+
+            return;
+        }
+
+
+        username =
+            await UserManager
+                .GetUserNameAsync(user);
+
+
+        phoneNumber =
+            await UserManager
+                .GetPhoneNumberAsync(user);
+
+
+        Input.PhoneNumber ??=
+            phoneNumber;
+    }
+
+
+    private async Task OnValidSubmitAsync()
+    {
+        if (user is null)
+        {
+            RedirectManager
+                .RedirectToInvalidUser(
+                    UserManager,
+                    HttpContext);
+
+            return;
+        }
+
+
+        if (Input.PhoneNumber != phoneNumber)
+        {
+            var setPhoneResult =
+                await UserManager
+                    .SetPhoneNumberAsync(
+                        user,
+                        Input.PhoneNumber);
+
+
+            if (!setPhoneResult.Succeeded)
+            {
+                RedirectManager
+                    .RedirectToCurrentPageWithStatus(
+                        "Fehler: Telefonnummer konnte nicht gespeichert werden.",
+                        HttpContext);
+
+                return;
+            }
+        }
+
+
+        await SignInManager
+            .RefreshSignInAsync(user);
+
+
+        RedirectManager
+            .RedirectToCurrentPageWithStatus(
+                "Dein Profil wurde erfolgreich aktualisiert.",
+                HttpContext);
+    }
+
+
+    private sealed class InputModel
+    {
+        [Phone]
+        [Display(Name = "Telefonnummer")]
+        public string? PhoneNumber { get; set; }
+    }
+}
