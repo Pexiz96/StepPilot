@@ -9,93 +9,29 @@
 <MudLayout>
     <MudAppBar Elevation="0" Class="sp-appbar">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" OnClick="ToggleDrawer" />
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-            <span class="sp-brand-mark">S</span>
-            <MudText Typo="Typo.h6" Class="sp-brand">StepPilot</MudText>
-        </MudStack>
-        <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.AccountCircle" Href="/Account/Manage" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1"><span class="sp-brand-mark">S</span><MudText Typo="Typo.h6" Class="sp-brand">StepPilot</MudText></MudStack>
+        <MudSpacer /><MudIconButton Icon="@Icons.Material.Filled.AccountCircle" Href="/Account/Manage" />
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Class="sp-drawer">
-        <MudDrawerHeader>
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                <span class="sp-brand-mark">S</span>
-                <MudText Typo="Typo.h5" Class="sp-brand">StepPilot</MudText>
-            </MudStack>
-        </MudDrawerHeader>
-
+        <MudDrawerHeader><MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1"><span class="sp-brand-mark">S</span><MudText Typo="Typo.h5" Class="sp-brand">StepPilot</MudText></MudStack></MudDrawerHeader>
         <MudNavMenu>
             <MudNavLink Href="/" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
-
-            <AuthorizeView Roles="@AppRoles.SuperAdmin">
-                <MudNavLink Href="/companies" Icon="@Icons.Material.Filled.Business">Unternehmen</MudNavLink>
-                <MudNavLink Href="/superadmin/test" Icon="@Icons.Material.Filled.Science">Testbereich</MudNavLink>
-            </AuthorizeView>
-
+            <AuthorizeView Roles="@AppRoles.SuperAdmin"><MudNavLink Href="/companies" Icon="@Icons.Material.Filled.Business">Unternehmen</MudNavLink><MudNavLink Href="/superadmin/test" Icon="@Icons.Material.Filled.Science">Testbereich</MudNavLink></AuthorizeView>
             <AuthorizeView Roles="@($"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")">
-                <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.People">Mitarbeiter</MudNavLink>
-                <MudNavLink Href="/locations" Icon="@Icons.Material.Filled.Place">Standorte</MudNavLink>
-                <MudNavLink Href="/departments" Icon="@Icons.Material.Filled.AccountTree">Abteilungen</MudNavLink>
-                <MudNavLink Href="/qualifications" Icon="@Icons.Material.Filled.WorkspacePremium">Qualifikationen</MudNavLink>
-                <MudNavLink Href="/shift-templates" Icon="@Icons.Material.Filled.Schedule">Schichtvorlagen</MudNavLink>
-                <MudNavLink Href="/shift-preferences" Icon="@Icons.Material.Filled.Tune">Schichtpräferenzen</MudNavLink>
-                <MudNavLink Href="/schedule" Icon="@Icons.Material.Filled.CalendarMonth">Schichtplanung</MudNavLink>
-                <MudNavLink Href="/absences" Icon="@Icons.Material.Filled.EventBusy">Abwesenheiten</MudNavLink>
-                <MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Verfügbarkeiten</MudNavLink>
-                <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Auswertungen</MudNavLink>
+                <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.People">Mitarbeiter</MudNavLink><MudNavLink Href="/locations" Icon="@Icons.Material.Filled.Place">Standorte</MudNavLink><MudNavLink Href="/departments" Icon="@Icons.Material.Filled.AccountTree">Abteilungen</MudNavLink><MudNavLink Href="/qualifications" Icon="@Icons.Material.Filled.WorkspacePremium">Qualifikationen</MudNavLink><MudNavLink Href="/shift-templates" Icon="@Icons.Material.Filled.Schedule">Schichtvorlagen</MudNavLink><MudNavLink Href="/shift-preferences" Icon="@Icons.Material.Filled.Tune">Schichtpräferenzen</MudNavLink><MudNavLink Href="/schedule" Icon="@Icons.Material.Filled.CalendarMonth">Schichtplanung</MudNavLink><MudNavLink Href="/open-shift-requests" Icon="@Icons.Material.Filled.SwapHoriz">Schichtanfragen</MudNavLink><MudNavLink Href="/absences" Icon="@Icons.Material.Filled.EventBusy">Abwesenheiten</MudNavLink><MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Verfügbarkeiten</MudNavLink><MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Auswertungen</MudNavLink>
             </AuthorizeView>
-
-            <AuthorizeView Roles="@($"{AppRoles.Owner},{AppRoles.Admin}")">
-                <MudNavLink Href="/user-accounts" Icon="@Icons.Material.Filled.ManageAccounts">Benutzerkonten</MudNavLink>
-            </AuthorizeView>
-
-            <AuthorizeView Roles="@AppRoles.Employee">
-                <MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Meine Verfügbarkeit</MudNavLink>
-            </AuthorizeView>
-
-            <AuthorizeView>
-                <MudNavLink Href="/my-schedule" Icon="@Icons.Material.Filled.Event">Meine Schichten</MudNavLink>
-            </AuthorizeView>
+            <AuthorizeView Roles="@($"{AppRoles.Owner},{AppRoles.Admin}")"><MudNavLink Href="/user-accounts" Icon="@Icons.Material.Filled.ManageAccounts">Benutzerkonten</MudNavLink></AuthorizeView>
+            <AuthorizeView Roles="@AppRoles.Employee"><MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Meine Verfügbarkeit</MudNavLink><MudNavLink Href="/open-shifts" Icon="@Icons.Material.Filled.AddTask">Offene Schichten</MudNavLink></AuthorizeView>
+            <AuthorizeView><MudNavLink Href="/my-schedule" Icon="@Icons.Material.Filled.Event">Meine Schichten</MudNavLink></AuthorizeView>
         </MudNavMenu>
     </MudDrawer>
-
-    <MudMainContent Class="sp-main">
-        <MudContainer MaxWidth="MaxWidth.False" Class="sp-content">
-            @Body
-        </MudContainer>
-    </MudMainContent>
+    <MudMainContent Class="sp-main"><MudContainer MaxWidth="MaxWidth.False" Class="sp-content">@Body</MudContainer></MudMainContent>
 </MudLayout>
 
 @code {
     private bool _drawerOpen = true;
     private bool _isDarkMode = true;
-
-    private readonly MudTheme _theme = new()
-    {
-        PaletteDark = new PaletteDark
-        {
-            Primary = "#8B5CF6",
-            Secondary = "#93A4BE",
-            Tertiary = "#4F7CFF",
-            Success = "#27C96F",
-            Warning = "#F59E0B",
-            Error = "#EF5261",
-            Info = "#4F7CFF",
-            Background = "#07111F",
-            Surface = "#101D31",
-            DrawerBackground = "#081321",
-            AppbarBackground = "#07111F",
-            TextPrimary = "#F4F7FB",
-            TextSecondary = "#9FB0C9",
-            ActionDefault = "#9FB0C9",
-            Divider = "rgba(148,163,184,.16)"
-        },
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "10px"
-        }
-    };
-
+    private readonly MudTheme _theme = new() { PaletteDark = new PaletteDark { Primary = "#8B5CF6", Secondary = "#93A4BE", Tertiary = "#4F7CFF", Success = "#27C96F", Warning = "#F59E0B", Error = "#EF5261", Info = "#4F7CFF", Background = "#07111F", Surface = "#101D31", DrawerBackground = "#081321", AppbarBackground = "#07111F", TextPrimary = "#F4F7FB", TextSecondary = "#9FB0C9", ActionDefault = "#9FB0C9", Divider = "rgba(148,163,184,.16)" }, LayoutProperties = new LayoutProperties { DefaultBorderRadius = "10px" } };
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 }
