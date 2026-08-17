@@ -1,6 +1,44 @@
+<div align="center">
+
+<img src="wwwroot/images/steppilot-logo.png" alt="StepPilot Logo" width="150" />
+
 # StepPilot
 
-StepPilot ist eine mandantenfähige Webanwendung zur digitalen Mitarbeiter- und Schichtplanung. Das Projekt wurde als praxisnahes Portfolio-Projekt für moderne Personalplanung entwickelt und bildet typische Abläufe aus Unternehmen ab.
+### Moderne Mitarbeiter- und Schichtplanung für Unternehmen
+
+**Planen · Koordinieren · Informieren · Auswerten**
+
+![.NET](https://img.shields.io/badge/.NET-Blazor-512BD4?style=flat-square&logo=dotnet)
+![C#](https://img.shields.io/badge/C%23-Application-512BD4?style=flat-square&logo=csharp)
+![EF Core](https://img.shields.io/badge/Entity%20Framework-Core-512BD4?style=flat-square)
+![SQL Server](https://img.shields.io/badge/SQL-Server-CC2927?style=flat-square&logo=microsoftsqlserver)
+![MudBlazor](https://img.shields.io/badge/UI-MudBlazor-594AE2?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Portfolio%20v1.0-success?style=flat-square)
+
+</div>
+
+---
+
+## Über StepPilot
+
+**StepPilot** ist eine mandantenfähige Webanwendung für die digitale Mitarbeiter- und Schichtplanung. Sie bildet typische Abläufe aus der betrieblichen Personalplanung in einer zentralen Anwendung ab – von der Mitarbeiterverwaltung über die Dienstplanung bis zu Abwesenheiten, Schichttausch, Benachrichtigungen und Auswertungen.
+
+Das Projekt wurde als praxisnahes Portfolio-Projekt entwickelt und legt besonderen Wert auf eine klare Rollenverteilung, Mandantentrennung und realistische Workflows.
+
+> **Ziel:** Weniger organisatorischer Aufwand, bessere Übersicht und eine zentrale Anlaufstelle für Planung und Mitarbeiter.
+
+## Highlights
+
+| Bereich | Funktionen |
+| --- | --- |
+| **Dienstplanung** | Wochenbasierte Planung, Schichtvorlagen, automatische Planung und Konfliktprüfung |
+| **Mitarbeiter** | Mitarbeiter, Standorte, Abteilungen, Qualifikationen und Benutzerkonten |
+| **Self-Service** | Eigene Schichten, Verfügbarkeiten, offene Schichten und Schichttausch |
+| **Abwesenheiten** | Urlaub, Krankheit und weitere Abwesenheiten mit Genehmigungsworkflow |
+| **Kommunikation** | In-App-Benachrichtigungen bei wichtigen Planungsereignissen |
+| **Management** | Handlungszentrum, Planqualitätsprüfung und Auswertungen |
+| **Reporting** | Soll-/Ist-Stunden, Auslastung, Besetzungsgrad und CSV-Export |
+| **UX** | Modernes responsives UI sowie Dark und Light Mode |
 
 ## Funktionsumfang
 
@@ -11,7 +49,7 @@ StepPilot ist eine mandantenfähige Webanwendung zur digitalen Mitarbeiter- und 
 - Wochenbasierte Dienstplanung
 - Automatische Schichtplanung mit Konfliktprüfung
 - Veröffentlichung von Dienstplänen
-- Persönliche Ansicht „Meine Schichten“
+- Persönliche Ansicht **„Meine Schichten“**
 - Verfügbarkeiten
 - Urlaubs- und Abwesenheitsverwaltung
 - Offene Schichten und freiwillige Übernahmeanfragen
@@ -21,69 +59,137 @@ StepPilot ist eine mandantenfähige Webanwendung zur digitalen Mitarbeiter- und 
 - Handlungszentrum für offene Personalentscheidungen
 - Planqualitätsprüfung
 - Auswertungen zu Soll-/Ist-Stunden, Auslastung und Besetzungsgrad
-- CSV-Export für Auswertungen
+- CSV-Export
 - Dark Mode und Light Mode
 - Rollen- und mandantenbasierte Zugriffskontrolle
 
-## Rollen
+## Rollen & Berechtigungen
 
-StepPilot verwendet folgende Rollen:
+| Rolle | Aufgabe |
+| --- | --- |
+| **SuperAdmin** | Unternehmen verwalten und privaten Administrations-/Testbereich nutzen |
+| **Owner** | Unternehmensverantwortung und umfangreiche Verwaltungsrechte |
+| **Admin** | Mitarbeiter und Benutzerkonten verwalten |
+| **Planner** | Operative Schicht- und Personalplanung |
+| **Employee** | Eigene Schichten, Verfügbarkeiten, offene Schichten und Tauschanfragen verwalten |
 
-- **SuperAdmin** – verwaltet Unternehmen und den privaten Administrations-/Testbereich
-- **Owner** – Unternehmensverantwortlicher mit umfangreichen Verwaltungsrechten
-- **Admin** – Verwaltung von Mitarbeitern und Benutzerkonten
-- **Planner** – operative Schicht- und Personalplanung
-- **Employee** – persönlicher Mitarbeiterbereich für eigene Schichten, Verfügbarkeiten, offene Schichten und Tauschanfragen
+Unternehmen registrieren sich nicht selbst. Neue Unternehmen werden ausschließlich durch den **SuperAdmin** angelegt.
 
-Unternehmen können sich nicht selbst registrieren. Neue Unternehmen werden ausschließlich durch den SuperAdmin angelegt.
+## Typischer Workflow
 
-## Sicherheit und Mandantentrennung
+```text
+Unternehmen anlegen
+        ↓
+Mitarbeiter & Benutzerkonten verwalten
+        ↓
+Standorte / Abteilungen / Qualifikationen definieren
+        ↓
+Schichten planen und prüfen
+        ↓
+Dienstplan veröffentlichen
+        ↓
+Mitarbeiter werden informiert
+        ↓
+Abwesenheiten / offene Schichten / Schichttausch bearbeiten
+        ↓
+Planqualität und Auswertungen kontrollieren
+```
 
-Unternehmensdaten werden über `CompanyId` voneinander getrennt. Geschützte Bereiche verwenden Rollenprüfungen und den `TenantGuard`, damit normale Benutzer ausschließlich Daten ihres eigenen Unternehmens aufrufen können.
+## Sicherheit & Mandantentrennung
 
-Zusätzlich prüft die zentrale Autorisierung, ob Benutzerkonto und Unternehmen aktiv sind. Für Nicht-Entwicklungsumgebungen werden detaillierte Blazor-Fehler deaktiviert und grundlegende HTTP-Sicherheitsheader gesetzt.
+StepPilot trennt Unternehmensdaten über die jeweilige `CompanyId`. Geschützte Bereiche kombinieren Rollenprüfungen mit einem zentralen `TenantGuard`, sodass normale Benutzer ausschließlich auf Daten ihres eigenen Unternehmens zugreifen können.
+
+Zusätzlich prüft die zentrale Autorisierung, ob das Benutzerkonto und das zugeordnete Unternehmen aktiv sind. Für Nicht-Entwicklungsumgebungen werden detaillierte Blazor-Fehler deaktiviert und grundlegende HTTP-Sicherheitsheader gesetzt.
 
 ## Technologie
 
-- ASP.NET Core / Blazor Web App
-- C#
-- Entity Framework Core
-- SQL Server / LocalDB
-- ASP.NET Core Identity
-- MudBlazor
+| Technologie | Einsatz |
+| --- | --- |
+| **ASP.NET Core / Blazor** | Webanwendung und UI-Logik |
+| **C#** | Backend- und Anwendungslogik |
+| **Entity Framework Core** | Datenzugriff und Migrationen |
+| **SQL Server / LocalDB** | Persistente Datenhaltung |
+| **ASP.NET Core Identity** | Login, Benutzer und Rollen |
+| **MudBlazor** | UI-Komponenten und Design |
 
-## Lokale Entwicklung
+## Projektstruktur
 
-Voraussetzungen:
+```text
+StepPilot/
+├── Components/       # Razor-Komponenten, Layout und Seiten
+├── Data/             # DbContext, Models, Rollen und Migrationen
+├── Services/         # Geschäftslogik und zentrale Services
+├── wwwroot/          # Styles, JavaScript und Branding
+├── Program.cs        # Anwendungskonfiguration
+└── README.md
+```
 
-- aktuelle .NET-SDK-Version passend zum Projekt
-- SQL Server LocalDB oder eine kompatible SQL-Server-Instanz
+## Lokal starten
+
+### Voraussetzungen
+
+- zum Projekt passende aktuelle .NET-SDK-Version
+- SQL Server LocalDB oder kompatible SQL-Server-Instanz
 - Visual Studio oder eine andere .NET-IDE
 
-Nach dem Klonen des Repositories:
+### 1. Repository klonen
+
+```bash
+git clone https://github.com/Pexiz96/StepPilot.git
+cd StepPilot
+```
+
+### 2. Abhängigkeiten wiederherstellen
 
 ```bash
 dotnet restore
 ```
 
-Datenbankmigrationen anwenden:
+### 3. Datenbank vorbereiten
+
+In der Package Manager Console von Visual Studio:
 
 ```powershell
 Update-Database
 ```
 
-Alternativ über die .NET CLI, wenn das EF-Tool installiert ist:
+Alternativ mit installierten EF-Core-Tools:
 
 ```bash
 dotnet ef database update
 ```
 
-Anschließend kann das Projekt gestartet werden.
+### 4. Anwendung starten
+
+```bash
+dotnet run
+```
 
 ## Projektstatus
 
-Der aktuelle Stand ist als **Portfolio-/Version-1.0-Stand** gedacht. Die Kernprozesse der Mitarbeiter- und Schichtplanung sind umgesetzt. Für einen produktiven SaaS-Einsatz wären zusätzlich unter anderem Deployment-Konfiguration, echtes E-Mail-Versenden, automatisierte Tests, Monitoring, Backup-Konzept und weitere Betriebs-/Datenschutzmaßnahmen erforderlich.
+**StepPilot befindet sich aktuell auf dem Portfolio-/Version-1.0-Stand.** Die zentralen Prozesse einer Mitarbeiter- und Schichtplanung sind umgesetzt und die Anwendung dient als demonstrierbares Full-Stack-/Business-Software-Projekt.
 
-## Ziel des Projekts
+Für einen realen produktiven SaaS-Betrieb wären unter anderem weitere Maßnahmen sinnvoll:
 
-StepPilot zeigt den Aufbau einer mehrbenutzerfähigen Business-Anwendung mit Authentifizierung, Rollen, Mandantentrennung, Datenbankzugriff und realistischen Personalplanungsprozessen.
+- produktionsreifes Deployment und Secret-Management
+- echter E-Mail-Versand
+- automatisierte Unit-, Integrations- und End-to-End-Tests
+- Monitoring und Logging-Konzept
+- Backup- und Wiederherstellungsstrategie
+- erweiterte Datenschutz- und Betriebsmaßnahmen
+
+## Was dieses Projekt demonstriert
+
+StepPilot zeigt unter anderem praktische Kenntnisse in:
+
+`C#` · `Blazor` · `ASP.NET Core` · `Entity Framework Core` · `SQL Server` · `Identity` · `Rollen & Autorisierung` · `Mandantenfähigkeit` · `Business-Workflows` · `UI/UX`
+
+---
+
+<div align="center">
+
+**StepPilot – Schichtplanung mit Überblick.**
+
+Portfolio-Projekt · Version 1.0
+
+</div>
