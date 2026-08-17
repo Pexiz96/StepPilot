@@ -15,50 +15,36 @@
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive">
-        <MudDrawerHeader>
-            <MudText Typo="Typo.h5">StepPilot</MudText>
-        </MudDrawerHeader>
-
+        <MudDrawerHeader><MudText Typo="Typo.h5">StepPilot</MudText></MudDrawerHeader>
         <MudNavMenu>
             <MudNavLink Href="/" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
-
             <AuthorizeView Roles="@AppRoles.SuperAdmin">
                 <MudNavLink Href="/companies" Icon="@Icons.Material.Filled.Business">Unternehmen</MudNavLink>
                 <MudNavLink Href="/superadmin/test" Icon="@Icons.Material.Filled.Science">Testbereich</MudNavLink>
             </AuthorizeView>
-
             <AuthorizeView Roles="@($"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")">
                 <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.People">Mitarbeiter</MudNavLink>
                 <MudNavLink Href="/locations" Icon="@Icons.Material.Filled.Place">Standorte</MudNavLink>
                 <MudNavLink Href="/departments" Icon="@Icons.Material.Filled.AccountTree">Abteilungen</MudNavLink>
                 <MudNavLink Href="/qualifications" Icon="@Icons.Material.Filled.WorkspacePremium">Qualifikationen</MudNavLink>
                 <MudNavLink Href="/shift-templates" Icon="@Icons.Material.Filled.Schedule">Schichtvorlagen</MudNavLink>
+                <MudNavLink Href="/shift-preferences" Icon="@Icons.Material.Filled.Tune">Schichtpräferenzen</MudNavLink>
                 <MudNavLink Href="/schedule" Icon="@Icons.Material.Filled.CalendarMonth">Schichtplanung</MudNavLink>
                 <MudNavLink Href="/absences" Icon="@Icons.Material.Filled.EventBusy">Abwesenheiten</MudNavLink>
                 <MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Verfügbarkeiten</MudNavLink>
                 <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Auswertungen</MudNavLink>
             </AuthorizeView>
-
             <AuthorizeView Roles="@AppRoles.Employee">
                 <MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Meine Verfügbarkeit</MudNavLink>
             </AuthorizeView>
-
-            <AuthorizeView>
-                <MudNavLink Href="/my-schedule" Icon="@Icons.Material.Filled.Event">Meine Schichten</MudNavLink>
-            </AuthorizeView>
+            <AuthorizeView><MudNavLink Href="/my-schedule" Icon="@Icons.Material.Filled.Event">Meine Schichten</MudNavLink></AuthorizeView>
         </MudNavMenu>
     </MudDrawer>
-
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
-            @Body
-        </MudContainer>
-    </MudMainContent>
+    <MudMainContent><MudContainer MaxWidth="MaxWidth.False" Class="pa-6">@Body</MudContainer></MudMainContent>
 </MudLayout>
 
 @code {
     private bool _drawerOpen = true;
     private bool _isDarkMode = true;
-
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 }
