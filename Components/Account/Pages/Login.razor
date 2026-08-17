@@ -11,62 +11,261 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Log in</PageTitle>
+<PageTitle>Anmelden | StepPilot</PageTitle>
 
-<h1>Log in</h1>
-<div class="row">
-    <div class="col-lg-6">
-        <section>
-            <StatusMessage Message="@errorMessage" />
-            <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
-                <DataAnnotationsValidator />
-                <h2>Use a local account to log in.</h2>
-                <hr />
-                <ValidationSummary class="text-danger" role="alert" />
-                <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username webauthn" aria-required="true" placeholder="name@example.com" />
-                    <label for="Input.Email" class="form-label">Email</label>
-                    <ValidationMessage For="() => Input.Email" class="text-danger" />
+<div class="sp-login-page">
+    <div class="sp-login-card">
+        <div class="sp-login-brand">
+            <div class="sp-login-logo">S</div>
+            <div>
+                <div class="sp-login-title">Willkommen bei StepPilot</div>
+                <div class="sp-login-subtitle">Melde dich an, um deine Personalplanung zu verwalten.</div>
+            </div>
+        </div>
+
+        <StatusMessage Message="@errorMessage" />
+
+        <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login" class="sp-login-form">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+
+            <div class="sp-field-group">
+                <label for="Input.Email" class="sp-field-label">E-Mail</label>
+                <div class="sp-input-wrap">
+                    <span class="material-symbols-outlined sp-input-icon">mail</span>
+                    <InputText @bind-Value="Input.Email"
+                               id="Input.Email"
+                               class="sp-input"
+                               autocomplete="username webauthn"
+                               aria-required="true"
+                               placeholder="name@unternehmen.de" />
                 </div>
-                <div class="form-floating mb-3">
-                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" />
-                    <label for="Input.Password" class="form-label">Password</label>
-                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                <ValidationMessage For="() => Input.Email" class="text-danger" />
+            </div>
+
+            <div class="sp-field-group">
+                <label for="Input.Password" class="sp-field-label">Passwort</label>
+                <div class="sp-input-wrap">
+                    <span class="material-symbols-outlined sp-input-icon">lock</span>
+                    <InputText type="password"
+                               @bind-Value="Input.Password"
+                               id="Input.Password"
+                               class="sp-input"
+                               autocomplete="current-password"
+                               aria-required="true"
+                               placeholder="Passwort eingeben" />
                 </div>
-                <div class="checkbox mb-3">
-                    <label class="form-label">
-                        <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input" />
-                        Remember me
-                    </label>
-                </div>
-                <div>
-                    <button type="submit" class="w-100 btn btn-lg btn-primary">Log in</button>
-                </div>
-                <hr />
-                <div class="d-flex flex-column">
-                    <span class="text-secondary mx-auto mt-2">OR</span>
-                    <PasskeySubmit Operation="PasskeyOperation.Request" Name="Input.Passkey" EmailName="Input.Email" class="btn btn-link mx-auto">Log in with a passkey</PasskeySubmit>
-                </div>
-                <hr />
-                <div>
-                    <p>
-                        <a href="Account/ForgotPassword">Forgot your password?</a>
-                    </p>
-                    <p>
-                        <a href="Account/ResendEmailConfirmation">Resend email confirmation</a>
-                    </p>
-                </div>
-            </EditForm>
-        </section>
+                <ValidationMessage For="() => Input.Password" class="text-danger" />
+            </div>
+
+            <div class="sp-login-options">
+                <label class="sp-remember">
+                    <InputCheckbox @bind-Value="Input.RememberMe" class="sp-checkbox" />
+                    <span>Angemeldet bleiben</span>
+                </label>
+
+                <a class="sp-login-link" href="Account/ForgotPassword">Passwort vergessen?</a>
+            </div>
+
+            <button type="submit" class="sp-login-button">Anmelden</button>
+
+            <div class="sp-login-divider"><span>oder</span></div>
+
+            <PasskeySubmit Operation="PasskeyOperation.Request"
+                           Name="Input.Passkey"
+                           EmailName="Input.Email"
+                           class="sp-passkey-button">
+                Mit Passkey anmelden
+            </PasskeySubmit>
+
+            <div class="sp-login-footer">
+                <a href="Account/ResendEmailConfirmation">Bestätigungs-E-Mail erneut senden</a>
+            </div>
+        </EditForm>
     </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to log in.</h3>
-            <hr />
-            <ExternalLoginPicker />
-        </section>
+
+    <div class="sp-login-sidecard">
+        <div class="sp-side-icon">✓</div>
+        <div class="sp-side-title">Sicher. Modern. Planen.</div>
+        <div class="sp-side-text">Dienstpläne, Verfügbarkeiten, Abwesenheiten und Mitarbeiterzugänge zentral in einer Anwendung.</div>
     </div>
 </div>
+
+<style>
+    .sp-login-page {
+        min-height: calc(100vh - 96px);
+        display: grid;
+        grid-template-columns: minmax(320px, 560px) minmax(260px, 380px);
+        gap: 28px;
+        align-items: center;
+        justify-content: center;
+        padding: 36px 24px;
+    }
+
+    .sp-login-card,
+    .sp-login-sidecard {
+        background: linear-gradient(180deg, rgba(20, 32, 53, .96), rgba(12, 24, 42, .98));
+        border: 1px solid rgba(129, 111, 255, .18);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, .28);
+        border-radius: 22px;
+    }
+
+    .sp-login-card { padding: 34px; }
+    .sp-login-sidecard { padding: 30px; }
+
+    .sp-login-brand {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    .sp-login-logo {
+        width: 54px;
+        height: 54px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: white;
+        background: linear-gradient(135deg, #6f5cff, #8b5cf6);
+        box-shadow: 0 12px 30px rgba(111, 92, 255, .28);
+    }
+
+    .sp-login-title {
+        font-size: 1.55rem;
+        font-weight: 750;
+        color: #f8fafc;
+    }
+
+    .sp-login-subtitle {
+        margin-top: 4px;
+        color: #9fb0c8;
+        font-size: .95rem;
+    }
+
+    .sp-login-form { display: grid; gap: 18px; }
+    .sp-field-group { display: grid; gap: 7px; }
+    .sp-field-label { color: #cbd5e1; font-weight: 600; font-size: .9rem; }
+
+    .sp-input-wrap { position: relative; }
+    .sp-input-icon {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 20px;
+        color: #7f8ea6;
+        pointer-events: none;
+    }
+
+    .sp-input {
+        width: 100%;
+        height: 50px;
+        padding: 0 14px 0 46px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, .22);
+        background: rgba(15, 30, 50, .88);
+        color: #f8fafc;
+        outline: none;
+        transition: .2s ease;
+    }
+
+    .sp-input:focus {
+        border-color: #7c6cff;
+        box-shadow: 0 0 0 3px rgba(124, 108, 255, .12);
+    }
+
+    .sp-login-options {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+
+    .sp-remember {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #cbd5e1;
+        font-size: .9rem;
+    }
+
+    .sp-login-link,
+    .sp-login-footer a {
+        color: #9f8cff;
+        text-decoration: none;
+        font-size: .9rem;
+    }
+
+    .sp-login-link:hover,
+    .sp-login-footer a:hover { color: #c4b5fd; }
+
+    .sp-login-button,
+    .sp-passkey-button {
+        width: 100%;
+        min-height: 48px;
+        border-radius: 12px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .sp-login-button {
+        border: none;
+        color: white;
+        background: linear-gradient(90deg, #6158ff, #8b5cf6);
+        box-shadow: 0 10px 28px rgba(99, 91, 255, .22);
+    }
+
+    .sp-login-button:hover { filter: brightness(1.06); }
+
+    .sp-passkey-button {
+        border: 1px solid rgba(124, 108, 255, .35);
+        color: #d8d4ff;
+        background: rgba(124, 108, 255, .08);
+    }
+
+    .sp-login-divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #687892;
+        font-size: .82rem;
+    }
+
+    .sp-login-divider::before,
+    .sp-login-divider::after {
+        content: "";
+        height: 1px;
+        background: rgba(148, 163, 184, .14);
+        flex: 1;
+    }
+
+    .sp-login-footer { text-align: center; }
+
+    .sp-side-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: #5ee38f;
+        background: rgba(34, 197, 94, .12);
+        border: 1px solid rgba(34, 197, 94, .24);
+        font-weight: 800;
+        margin-bottom: 18px;
+    }
+
+    .sp-side-title { color: #f8fafc; font-size: 1.15rem; font-weight: 750; }
+    .sp-side-text { color: #94a3b8; line-height: 1.6; margin-top: 10px; }
+
+    @@media (max-width: 980px) {
+        .sp-login-page { grid-template-columns: 1fr; max-width: 620px; margin: 0 auto; }
+        .sp-login-sidecard { display: none; }
+    }
+</style>
 
 @code {
     private string? errorMessage;
@@ -84,12 +283,10 @@
     protected override async Task OnInitializedAsync()
     {
         Input ??= new();
-
         editContext = new EditContext(Input);
 
         if (HttpMethods.IsGet(HttpContext.Request.Method))
         {
-            // Clear the existing external cookie to ensure a clean login process
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
         }
     }
@@ -98,26 +295,18 @@
     {
         if (!string.IsNullOrEmpty(Input.Passkey?.Error))
         {
-            errorMessage = $"Error: {Input.Passkey.Error}";
+            errorMessage = $"Fehler: {Input.Passkey.Error}";
             return;
         }
 
         SignInResult result;
         if (!string.IsNullOrEmpty(Input.Passkey?.CredentialJson))
         {
-            // When performing passkey sign-in, don't perform form validation.
             result = await SignInManager.PasskeySignInAsync(Input.Passkey.CredentialJson);
         }
         else
         {
-            // If doing a password sign-in, validate the form.
-            if (!editContext.Validate())
-            {
-                return;
-            }
-
-            // This doesn't count login failures towards account lockout
-            // To enable password failures to trigger account lockout, set lockoutOnFailure: true
+            if (!editContext.Validate()) return;
             result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
         }
 
@@ -128,9 +317,7 @@
         }
         else if (result.RequiresTwoFactor)
         {
-            RedirectManager.RedirectTo(
-                "Account/LoginWith2fa",
-                new() { ["returnUrl"] = ReturnUrl, ["rememberMe"] = Input.RememberMe });
+            RedirectManager.RedirectTo("Account/LoginWith2fa", new() { ["returnUrl"] = ReturnUrl, ["rememberMe"] = Input.RememberMe });
         }
         else if (result.IsLockedOut)
         {
@@ -139,21 +326,21 @@
         }
         else
         {
-            errorMessage = "Error: Invalid login attempt.";
+            errorMessage = "Fehler: E-Mail oder Passwort ist nicht korrekt.";
         }
     }
 
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "Bitte gib deine E-Mail-Adresse ein.")]
+        [EmailAddress(ErrorMessage = "Bitte gib eine gültige E-Mail-Adresse ein.")]
         public string Email { get; set; } = "";
 
-        [Required]
+        [Required(ErrorMessage = "Bitte gib dein Passwort ein.")]
         [DataType(DataType.Password)]
         public string Password { get; set; } = "";
 
-        [Display(Name = "Remember me?")]
+        [Display(Name = "Angemeldet bleiben")]
         public bool RememberMe { get; set; }
 
         public PasskeyInputModel? Passkey { get; set; }
