@@ -11,6 +11,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeeLocation> EmployeeLocations => Set<EmployeeLocation>();
     public DbSet<Qualification> Qualifications => Set<Qualification>();
     public DbSet<EmployeeQualification> EmployeeQualifications => Set<EmployeeQualification>();
     public DbSet<Availability> Availabilities => Set<Availability>();
@@ -42,6 +43,21 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<Employee>()
             .HasOne(x => x.ApplicationUser).WithOne()
             .HasForeignKey<Employee>(x => x.ApplicationUserId).OnDelete(DeleteBehavior.SetNull);
+
+        builder.Entity<EmployeeLocation>()
+            .HasKey(x => new { x.EmployeeId, x.LocationId });
+        builder.Entity<EmployeeLocation>()
+            .HasIndex(x => new { x.CompanyId, x.LocationId });
+        builder.Entity<EmployeeLocation>()
+            .HasOne(x => x.Employee)
+            .WithMany(x => x.AdditionalLocations)
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<EmployeeLocation>()
+            .HasOne(x => x.Location)
+            .WithMany(x => x.AdditionalEmployees)
+            .HasForeignKey(x => x.LocationId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<Location>()
             .HasOne(x => x.Company).WithMany()
