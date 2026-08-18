@@ -23,6 +23,8 @@ public sealed class EmployeeService
         return await db.Employees.AsNoTracking()
             .Where(x => x.CompanyId == companyId)
             .Include(x => x.Location)
+            .Include(x => x.AdditionalLocations)
+                .ThenInclude(x => x.Location)
             .Include(x => x.Department)
             .OrderBy(x => x.LastName)
             .ThenBy(x => x.FirstName)
@@ -36,6 +38,28 @@ public sealed class EmployeeService
 
         employee.CompanyId = companyId;
 
+        if (employee.LocationId is int locationId)
+        {
+            var validLocation = await db.Locations.AnyAsync(x =>
+                x.Id == locationId &&
+                x.CompanyId == companyId &&
+                x.IsActive);
+
+            if (!validLocation)
+                throw new InvalidOperationException("Der ausgewählte Hauptstandort ist ungültig.");
+        }
+
+        if (employee.DepartmentId is int departmentId)
+        {
+            var validDepartment = await db.Departments.AnyAsync(x =>
+                x.Id == departmentId &&
+                x.CompanyId == companyId &&
+                x.IsActive);
+
+            if (!validDepartment)
+                throw new InvalidOperationException("Die ausgewählte Abteilung ist ungültig.");
+        }
+
         if (employee.Id == 0)
         {
             db.Employees.Add(employee);
@@ -46,6 +70,44 @@ public sealed class EmployeeService
                 .FirstAsync(x => x.Id == employee.Id && x.CompanyId == companyId);
 
             db.Entry(existing).CurrentValues.SetValues(employee);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    public async Task SaveAdditionalLocationsAsync(int employeeId, IEnumerable<int> locationIds)
+    {
+        var companyId = await _tenant.RequireCompanyIdAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+
+        var employee = await db.Employees
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == employeeId && x.CompanyId == companyId);
+
+        var requested = locationIds
+            .Where(x => employee.LocationId != x)
+            .Distinct()
+            .ToHashSet();
+
+        var validIds = await db.Locations
+            .Where(x => x.CompanyId == companyId && x.IsActive && requested.Contains(x.Id))
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        var existing = await db.EmployeeLocations
+            .Where(x => x.EmployeeId == employeeId && x.CompanyId == companyId)
+            .ToListAsync();
+
+        db.EmployeeLocations.RemoveRange(existing);
+
+        foreach (var locationId in validIds)
+        {
+            db.EmployeeLocations.Add(new EmployeeLocation
+            {
+                CompanyId = companyId,
+                EmployeeId = employeeId,
+                LocationId = locationId
+            });
         }
 
         await db.SaveChangesAsync();
