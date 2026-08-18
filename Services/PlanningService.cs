@@ -27,6 +27,7 @@ public sealed class PlanningService
         var employee = await db.Employees
             .AsNoTracking()
             .Include(x => x.Qualifications)
+            .Include(x => x.AdditionalLocations)
             .FirstOrDefaultAsync(x => x.Id == employeeId && x.CompanyId == companyId);
 
         var messages = new List<string>();
@@ -40,8 +41,14 @@ public sealed class PlanningService
         if (shift.Date < employee.HireDate || (employee.LeaveDate is not null && shift.Date > employee.LeaveDate.Value))
             messages.Add("Schicht liegt außerhalb des Beschäftigungszeitraums.");
 
-        if (shift.LocationId is int shiftLocationId && employee.LocationId is int employeeLocationId && shiftLocationId != employeeLocationId)
-            messages.Add("Mitarbeiter ist einem anderen Standort zugeordnet.");
+        if (shift.LocationId is int shiftLocationId)
+        {
+            var locationAllowed = employee.LocationId == shiftLocationId ||
+                                  employee.AdditionalLocations.Any(x => x.LocationId == shiftLocationId);
+
+            if (!locationAllowed)
+                messages.Add("Mitarbeiter ist für diesen Standort nicht freigegeben.");
+        }
 
         var absent = await db.Absences.AnyAsync(x =>
             x.CompanyId == companyId &&
@@ -91,8 +98,6 @@ public sealed class PlanningService
 
         if (shift.ShiftTemplateId is int shiftTemplateId)
         {
-            // EmployeeShiftPreference besitzt keine eigene CompanyId.
-            // Die Mandantentrennung erfolgt sicher über den bereits auf CompanyId geprüften Employee.
             var shiftPreferences = await db.EmployeeShiftPreferences
                 .AsNoTracking()
                 .Where(x => x.EmployeeId == employeeId)
