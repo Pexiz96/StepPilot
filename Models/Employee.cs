@@ -25,9 +25,14 @@ public class Employee : TenantEntity
 
     public bool IsActive { get; set; } = true;
 
+    // Hauptstandort des Mitarbeiters.
     public int? LocationId { get; set; }
 
     public Location? Location { get; set; }
+
+    // Weitere Standorte, an denen der Mitarbeiter eingesetzt werden darf.
+    public ICollection<EmployeeLocation> AdditionalLocations { get; set; }
+        = new List<EmployeeLocation>();
 
     public int? DepartmentId { get; set; }
 
