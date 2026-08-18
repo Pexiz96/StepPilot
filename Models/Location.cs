@@ -11,5 +11,10 @@ public class Location : TenantEntity
     public bool IsActive { get; set; } = true;
 
     public Company? Company { get; set; }
+
+    // Mitarbeiter, deren Hauptstandort dieser Standort ist.
     public ICollection<Employee> Employees { get; set; } = new List<Employee>();
+
+    // Mitarbeiter, die zusätzlich für diesen Standort freigegeben sind.
+    public ICollection<EmployeeLocation> AdditionalEmployees { get; set; } = new List<EmployeeLocation>();
 }
