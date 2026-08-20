@@ -8,11 +8,16 @@ public sealed class PlanningService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _factory;
     private readonly TenantGuard _tenant;
+    private readonly WorkTimeComplianceService _compliance;
 
-    public PlanningService(IDbContextFactory<ApplicationDbContext> factory, TenantGuard tenant)
+    public PlanningService(
+        IDbContextFactory<ApplicationDbContext> factory,
+        TenantGuard tenant,
+        WorkTimeComplianceService compliance)
     {
         _factory = factory;
         _tenant = tenant;
+        _compliance = compliance;
     }
 
     public async Task<List<string>> ValidateAssignmentAsync(int employeeId, int shiftId)
@@ -71,11 +76,13 @@ public sealed class PlanningService
                 x.Shift.Date <= shift.Date.AddDays(1))
             .ToListAsync();
 
-        if (nearbyAssignments.Any(x => x.Shift is not null && Overlaps(x.Shift, shift)))
+        if (nearbyAssignments.Any(x => x.Shift is not null && x.ShiftId != shift.Id && Overlaps(x.Shift, shift)))
             messages.Add("Mitarbeiter hat bereits eine überschneidende Schicht.");
 
-        if (nearbyAssignments.Any(x => x.Shift is not null && !Overlaps(x.Shift, shift) && RestHoursBetween(x.Shift, shift) < 11m))
-            messages.Add("Die gesetzliche Ruhezeit von 11 Stunden würde unterschritten.");
+        var complianceFindings = await _compliance.EvaluateAssignmentAsync(companyId, employeeId, shift);
+        messages.AddRange(complianceFindings
+            .Where(x => x.Severity == ComplianceSeverity.Error)
+            .Select(x => $"{x.Message} ({x.LegalReference})"));
 
         var availabilities = await db.Availabilities
             .AsNoTracking()
@@ -142,6 +149,25 @@ public sealed class PlanningService
         }
 
         return messages.Distinct().ToList();
+    }
+
+    public async Task<List<ComplianceFinding>> GetComplianceFindingsAsync(int employeeId, int shiftId)
+    {
+        var companyId = await _tenant.RequireCompanyIdAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+
+        var shift = await db.Shifts
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == shiftId && x.CompanyId == companyId);
+
+        var employeeExists = await db.Employees
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == employeeId && x.CompanyId == companyId);
+
+        if (!employeeExists)
+            return [];
+
+        return await _compliance.EvaluateAssignmentAsync(companyId, employeeId, shift);
     }
 
     public async Task<List<Employee>> FindReplacementCandidatesAsync(int shiftId)
@@ -259,17 +285,5 @@ public sealed class PlanningService
         var ai = Interval(a);
         var bi = Interval(b);
         return ai.Start < bi.End && ai.End > bi.Start;
-    }
-
-    private static decimal RestHoursBetween(Shift a, Shift b)
-    {
-        var ai = Interval(a);
-        var bi = Interval(b);
-
-        if (ai.Start < bi.End && ai.End > bi.Start)
-            return 0m;
-
-        var gap = ai.End <= bi.Start ? bi.Start - ai.End : ai.Start - bi.End;
-        return (decimal)gap.TotalHours;
     }
 }
