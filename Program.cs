@@ -69,6 +69,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddScoped<TenantGuard>();
 builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<WorkTimeComplianceService>();
 builder.Services.AddScoped<PlanningService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<DemoDataService>();
