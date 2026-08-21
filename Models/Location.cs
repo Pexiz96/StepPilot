@@ -8,6 +8,11 @@ public class Location : TenantEntity
     public string? AddressLine { get; set; }
     public string? PostalCode { get; set; }
     public string? City { get; set; }
+
+    // ISO 3166-2 subdivision code, e.g. DE-BE, DE-BY, DE-ST.
+    // Used by compliance services for location-specific public-holiday rules.
+    public string? FederalStateCode { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public Company? Company { get; set; }
