@@ -33,7 +33,8 @@ public sealed class WorkTimeComplianceService
     {
         await using var db = await _factory.CreateDbContextAsync();
 
-        var relevantAssignments = await db.ShiftAssignments
+        // Für Ruhezeiten genügt der direkte Zeitraum um die Kandidatenschicht.
+        var nearbyAssignments = await db.ShiftAssignments
             .AsNoTracking()
             .Include(x => x.Shift)
             .Where(x =>
@@ -45,7 +46,26 @@ public sealed class WorkTimeComplianceService
                 x.Shift.Date <= candidateShift.Date.AddDays(1))
             .ToListAsync();
 
-        var existingShifts = relevantAssignments
+        var nearbyShifts = nearbyAssignments
+            .Where(x => x.Shift is not null)
+            .Select(x => x.Shift!)
+            .ToList();
+
+        // Für Sonntagsregeln brauchen wir einen längeren Rückblick.
+        var historyStart = candidateShift.Date.AddDays(-370);
+        var historyAssignments = await db.ShiftAssignments
+            .AsNoTracking()
+            .Include(x => x.Shift)
+            .Where(x =>
+                x.CompanyId == companyId &&
+                x.EmployeeId == employeeId &&
+                x.Shift != null &&
+                x.ShiftId != candidateShift.Id &&
+                x.Shift.Date >= historyStart &&
+                x.Shift.Date <= candidateShift.Date.AddDays(56))
+            .ToListAsync();
+
+        var historyShifts = historyAssignments
             .Where(x => x.Shift is not null)
             .Select(x => x.Shift!)
             .ToList();
@@ -53,8 +73,10 @@ public sealed class WorkTimeComplianceService
         var findings = new List<ComplianceFinding>();
 
         EvaluateBreaks(candidateShift, findings);
-        EvaluateDailyWorkingTime(candidateShift, existingShifts, findings);
-        EvaluateRestPeriod(candidateShift, existingShifts, findings);
+        EvaluateDailyWorkingTime(candidateShift, nearbyShifts, findings);
+        EvaluateRestPeriod(candidateShift, nearbyShifts, findings);
+        EvaluateNightWork(candidateShift, findings);
+        EvaluateSundayWork(candidateShift, historyShifts, findings);
 
         return findings
             .GroupBy(x => x.Code)
@@ -129,6 +151,103 @@ public sealed class WorkTimeComplianceService
                 break;
             }
         }
+    }
+
+    private static void EvaluateNightWork(Shift shift, List<ComplianceFinding> findings)
+    {
+        var nightMinutes = OverlapMinutesWithDailyWindow(shift, new TimeOnly(23, 0), new TimeOnly(6, 0));
+
+        if (nightMinutes > 2 * 60)
+        {
+            findings.Add(new ComplianceFinding(
+                "ARBZG_NIGHT_WORK",
+                ComplianceSeverity.Info,
+                $"Die Schicht enthält {nightMinutes / 60m:0.##} Stunden innerhalb der gesetzlichen Nachtzeit. Nacht- und Schichtarbeit erfordert eine besondere arbeitszeitrechtliche Prüfung.",
+                "ArbZG § 2 Abs. 3-5, § 6"));
+        }
+    }
+
+    private static void EvaluateSundayWork(
+        Shift candidate,
+        IReadOnlyCollection<Shift> historyShifts,
+        List<ComplianceFinding> findings)
+    {
+        if (candidate.Date.DayOfWeek != DayOfWeek.Sunday)
+            return;
+
+        findings.Add(new ComplianceFinding(
+            "ARBZG_SUNDAY_PERMISSION",
+            ComplianceSeverity.Warning,
+            "Die Schicht liegt an einem Sonntag. Sonntagsbeschäftigung ist grundsätzlich untersagt und nur bei einer gesetzlichen, tariflichen oder behördlich zulässigen Ausnahme einzuplanen.",
+            "ArbZG §§ 9-13"));
+
+        var replacementDeadline = candidate.Date.AddDays(13);
+        var hasReplacementRestDay = Enumerable.Range(1, 13)
+            .Select(candidate.Date.AddDays)
+            .Any(date => historyShifts.All(x => x.Date != date));
+
+        if (!hasReplacementRestDay)
+        {
+            findings.Add(new ComplianceFinding(
+                "ARBZG_SUNDAY_REPLACEMENT_REST",
+                ComplianceSeverity.Error,
+                $"Für die Sonntagsbeschäftigung ist bis spätestens {replacementDeadline:dd.MM.yyyy} kein freier Ersatzruhetag erkennbar.",
+                "ArbZG § 11 Abs. 3"));
+        }
+        else
+        {
+            findings.Add(new ComplianceFinding(
+                "ARBZG_SUNDAY_REPLACEMENT_REST",
+                ComplianceSeverity.Info,
+                "Für Sonntagsarbeit muss innerhalb des gesetzlichen Zwei-Wochen-Zeitraums ein Ersatzruhetag gewährleistet sein. StepPilot hat im aktuellen Plan mindestens einen schichtfreien Tag erkannt.",
+                "ArbZG § 11 Abs. 3"));
+        }
+
+        var year = candidate.Date.Year;
+        var sundaysInYear = Enumerable.Range(0, DateTime.IsLeapYear(year) ? 366 : 365)
+            .Select(day => new DateOnly(year, 1, 1).AddDays(day))
+            .Where(x => x.DayOfWeek == DayOfWeek.Sunday)
+            .ToList();
+
+        var workedSundays = historyShifts
+            .Where(x => x.Date.Year == year && x.Date.DayOfWeek == DayOfWeek.Sunday)
+            .Select(x => x.Date)
+            .Append(candidate.Date)
+            .Distinct()
+            .Count();
+
+        var freeSundays = sundaysInYear.Count - workedSundays;
+        if (freeSundays < 15)
+        {
+            findings.Add(new ComplianceFinding(
+                "ARBZG_FREE_SUNDAYS",
+                ComplianceSeverity.Error,
+                $"Mit dieser Planung wären nach aktuellem Datenstand nur {freeSundays} beschäftigungsfreie Sonntage im Kalenderjahr übrig. Der gesetzliche Grundsatz verlangt mindestens 15.",
+                "ArbZG § 11 Abs. 1"));
+        }
+    }
+
+    private static int OverlapMinutesWithDailyWindow(Shift shift, TimeOnly windowStart, TimeOnly windowEnd)
+    {
+        var shiftInterval = Interval(shift);
+        var totalMinutes = 0d;
+
+        for (var dayOffset = -1; dayOffset <= 1; dayOffset++)
+        {
+            var date = shift.Date.AddDays(dayOffset);
+            var windowStartDateTime = date.ToDateTime(windowStart);
+            var windowEndDateTime = date.ToDateTime(windowEnd);
+            if (windowEndDateTime <= windowStartDateTime)
+                windowEndDateTime = windowEndDateTime.AddDays(1);
+
+            var overlapStart = shiftInterval.Start > windowStartDateTime ? shiftInterval.Start : windowStartDateTime;
+            var overlapEnd = shiftInterval.End < windowEndDateTime ? shiftInterval.End : windowEndDateTime;
+
+            if (overlapEnd > overlapStart)
+                totalMinutes += (overlapEnd - overlapStart).TotalMinutes;
+        }
+
+        return (int)Math.Round(totalMinutes);
     }
 
     private static int WorkingMinutes(Shift shift)
