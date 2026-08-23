@@ -72,6 +72,7 @@ builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<EmployeeImportFileService>();
 builder.Services.AddScoped<EmployeeImportService>();
 builder.Services.AddScoped<EmployeeImportHistoryService>();
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<GermanPublicHolidayService>();
 builder.Services.AddScoped<WorkTimeComplianceService>();
 builder.Services.AddScoped<PlanningService>();
