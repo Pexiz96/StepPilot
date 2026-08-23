@@ -1,0 +1,146 @@
+@page "/employees/bulk"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+@inject AuditLogService AuditLogService
+
+<PageTitle>Massenbearbeitung | StepPilot</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <div>
+        <MudText Typo="Typo.h4">Mitarbeiter massenweise bearbeiten</MudText>
+        <MudText Color="Color.Secondary">Standort, Abteilung und Status für viele Mitarbeiter in einem Schritt ändern.</MudText>
+    </div>
+    <MudSpacer />
+    <MudButton Href="/employees" Variant="Variant.Outlined">Zur Mitarbeiterliste</MudButton>
+</MudStack>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+}
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_search" Label="Suchen" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+        <MudItem xs="12" md="4">
+            <MudSelect T="int?" @bind-Value="_targetLocationId" Label="Neuer Hauptstandort" Variant="Variant.Outlined" Clearable="true">
+                @foreach (var location in _locations){<MudSelectItem T="int?" Value="@((int?)location.Id)">@location.Name</MudSelectItem>}
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSelect T="int?" @bind-Value="_targetDepartmentId" Label="Neue Abteilung" Variant="Variant.Outlined" Clearable="true">
+                @foreach (var department in _departments){<MudSelectItem T="int?" Value="@((int?)department.Id)">@department.Name</MudSelectItem>}
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
+    <MudStack Row="true" Spacing="2" Class="mt-4" AlignItems="AlignItems.Center">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_selected.Count == 0)" OnClick="ApplyStructureAsync">Standort/Abteilung anwenden</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Success" Disabled="@(_selected.Count == 0)" OnClick="@(() => SetActiveAsync(true))">Aktivieren</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="@(_selected.Count == 0)" OnClick="@(() => SetActiveAsync(false))">Deaktivieren</MudButton>
+        <MudSpacer />
+        <MudText Color="Color.Secondary">@_selected.Count ausgewählt</MudText>
+    </MudStack>
+</MudPaper>
+
+<MudPaper Class="pa-2">
+    <MudTable Items="FilteredEmployees" Dense="true" Hover="true" RowsPerPage="50">
+        <HeaderContent>
+            <MudTh><input type="checkbox" checked="@AllVisibleSelected" @onchange="ToggleAllVisible" /></MudTh>
+            <MudTh>Nr.</MudTh><MudTh>Name</MudTh><MudTh>Standort</MudTh><MudTh>Abteilung</MudTh><MudTh>Status</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><input type="checkbox" checked="@_selected.Contains(context.Id)" @onchange="@(e => Toggle(context.Id, e))" /></MudTd>
+            <MudTd>@context.EmployeeNumber</MudTd>
+            <MudTd>@context.FirstName @context.LastName</MudTd>
+            <MudTd>@(context.Location?.Name ?? "–")</MudTd>
+            <MudTd>@(context.Department?.Name ?? "–")</MudTd>
+            <MudTd>@(context.IsActive ? "Aktiv" : "Inaktiv")</MudTd>
+        </RowTemplate>
+        <PagerContent><MudTablePager PageSizeOptions="new int[] { 25, 50, 100, 250 }" /></PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private List<Employee> _employees = [];
+    private List<Location> _locations = [];
+    private List<Department> _departments = [];
+    private HashSet<int> _selected = [];
+    private string _search = string.Empty;
+    private int? _targetLocationId;
+    private int? _targetDepartmentId;
+    private string _message = string.Empty;
+    private Severity _severity = Severity.Info;
+
+    private IEnumerable<Employee> FilteredEmployees => _employees.Where(x =>
+        string.IsNullOrWhiteSpace(_search) ||
+        x.EmployeeNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        x.FirstName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        x.LastName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        (x.Location?.Name?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+        (x.Department?.Name?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    private bool AllVisibleSelected
+    {
+        get
+        {
+            var visible = FilteredEmployees.Select(x => x.Id).ToList();
+            return visible.Count > 0 && visible.All(_selected.Contains);
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _employees = await db.Employees.AsNoTracking().Include(x => x.Location).Include(x => x.Department)
+            .Where(x => x.CompanyId == companyId).OrderBy(x => x.LastName).ThenBy(x => x.FirstName).ToListAsync();
+        _locations = await db.Locations.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).OrderBy(x => x.Name).ToListAsync();
+        _departments = await db.Departments.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).OrderBy(x => x.Name).ToListAsync();
+    }
+
+    private void Toggle(int id, ChangeEventArgs args)
+    {
+        if (args.Value is bool value && value) _selected.Add(id); else _selected.Remove(id);
+    }
+
+    private void ToggleAllVisible(ChangeEventArgs args)
+    {
+        var ids = FilteredEmployees.Select(x => x.Id).ToList();
+        if (args.Value is bool value && value) foreach (var id in ids) _selected.Add(id);
+        else foreach (var id in ids) _selected.Remove(id);
+    }
+
+    private async Task ApplyStructureAsync()
+    {
+        if (_selected.Count == 0) return;
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var employees = await db.Employees.Where(x => x.CompanyId == companyId && _selected.Contains(x.Id)).ToListAsync();
+        foreach (var employee in employees)
+        {
+            if (_targetLocationId.HasValue) employee.LocationId = _targetLocationId;
+            if (_targetDepartmentId.HasValue) employee.DepartmentId = _targetDepartmentId;
+        }
+        await db.SaveChangesAsync();
+        await AuditLogService.WriteAsync("Organisation", "BulkUpdate", "Employee", null, $"{employees.Count} Mitarbeiter: Standort/Abteilung massenweise geändert.");
+        _message = $"{employees.Count} Mitarbeiter wurden aktualisiert."; _severity = Severity.Success;
+        _selected.Clear(); await LoadAsync();
+    }
+
+    private async Task SetActiveAsync(bool active)
+    {
+        if (_selected.Count == 0) return;
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var employees = await db.Employees.Where(x => x.CompanyId == companyId && _selected.Contains(x.Id)).ToListAsync();
+        foreach (var employee in employees) employee.IsActive = active;
+        await db.SaveChangesAsync();
+        await AuditLogService.WriteAsync("Organisation", active ? "BulkActivate" : "BulkDeactivate", "Employee", null, $"{employees.Count} Mitarbeiter massenweise {(active ? "aktiviert" : "deaktiviert")}.");
+        _message = $"{employees.Count} Mitarbeiter wurden {(active ? "aktiviert" : "deaktiviert")}."; _severity = Severity.Success;
+        _selected.Clear(); await LoadAsync();
+    }
+}
