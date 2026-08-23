@@ -61,10 +61,11 @@ public sealed class EmployeeImportService
         var companyId = await _tenant.RequireCompanyIdAsync();
         await using var db = await _factory.CreateDbContextAsync();
 
-        var existingNumbers = await db.Employees.AsNoTracking()
+        var existingNumberList = await db.Employees.AsNoTracking()
             .Where(x => x.CompanyId == companyId)
             .Select(x => x.EmployeeNumber)
-            .ToHashSetAsync(StringComparer.OrdinalIgnoreCase);
+            .ToListAsync();
+        var existingNumbers = existingNumberList.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var seenNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var rows = new List<EmployeeImportPreviewRow>();
@@ -105,20 +106,8 @@ public sealed class EmployeeImportService
             if (string.IsNullOrWhiteSpace(location)) warnings.Add("Kein Standort zugeordnet.");
 
             rows.Add(new EmployeeImportPreviewRow(
-                i + 2,
-                employeeNumber,
-                firstName,
-                lastName,
-                email,
-                phone,
-                weeklyHours,
-                position,
-                location,
-                department,
-                qualifications,
-                exists,
-                errors,
-                warnings));
+                i + 2, employeeNumber, firstName, lastName, email, phone, weeklyHours, position,
+                location, department, qualifications, exists, errors, warnings));
         }
 
         return new EmployeeImportPreview(
@@ -137,16 +126,15 @@ public sealed class EmployeeImportService
         await using var db = await _factory.CreateDbContextAsync();
         await using var transaction = await db.Database.BeginTransactionAsync();
 
-        var locations = await db.Locations.Where(x => x.CompanyId == companyId)
-            .ToDictionaryAsync(x => x.Name, StringComparer.OrdinalIgnoreCase);
-        var departments = await db.Departments.Where(x => x.CompanyId == companyId)
-            .ToDictionaryAsync(x => x.Name, StringComparer.OrdinalIgnoreCase);
-        var qualifications = await db.Qualifications.Where(x => x.CompanyId == companyId)
-            .ToDictionaryAsync(x => x.Name, StringComparer.OrdinalIgnoreCase);
-        var employees = await db.Employees
-            .Include(x => x.Qualifications)
-            .Where(x => x.CompanyId == companyId)
-            .ToDictionaryAsync(x => x.EmployeeNumber, StringComparer.OrdinalIgnoreCase);
+        var locationList = await db.Locations.Where(x => x.CompanyId == companyId).ToListAsync();
+        var departmentList = await db.Departments.Where(x => x.CompanyId == companyId).ToListAsync();
+        var qualificationList = await db.Qualifications.Where(x => x.CompanyId == companyId).ToListAsync();
+        var employeeList = await db.Employees.Include(x => x.Qualifications).Where(x => x.CompanyId == companyId).ToListAsync();
+
+        var locations = locationList.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+        var departments = departmentList.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+        var qualifications = qualificationList.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+        var employees = employeeList.ToDictionary(x => x.EmployeeNumber, StringComparer.OrdinalIgnoreCase);
 
         var created = 0;
         var updated = 0;
@@ -163,16 +151,14 @@ public sealed class EmployeeImportService
                 continue;
             }
 
-            if (employees.TryGetValue(row.EmployeeNumber, out var employee))
+            var isExisting = employees.TryGetValue(row.EmployeeNumber, out var employee);
+            if (isExisting && duplicateMode == ImportDuplicateMode.Skip)
             {
-                if (duplicateMode == ImportDuplicateMode.Skip)
-                {
-                    skipped++;
-                    continue;
-                }
-                updated++;
+                skipped++;
+                continue;
             }
-            else
+
+            if (!isExisting)
             {
                 employee = new Employee
                 {
@@ -185,8 +171,12 @@ public sealed class EmployeeImportService
                 employees[row.EmployeeNumber] = employee;
                 created++;
             }
+            else
+            {
+                updated++;
+            }
 
-            employee.FirstName = row.FirstName;
+            employee!.FirstName = row.FirstName;
             employee.LastName = row.LastName;
             employee.Email = row.Email;
             employee.PhoneNumber = row.PhoneNumber;
@@ -199,13 +189,10 @@ public sealed class EmployeeImportService
                 {
                     location = new Location { CompanyId = companyId, Name = row.Location, IsActive = true };
                     db.Locations.Add(location);
+                    await db.SaveChangesAsync();
                     locations[row.Location] = location;
                 }
-                if (location is not null)
-                {
-                    await db.SaveChangesAsync();
-                    employee.LocationId = location.Id;
-                }
+                if (location is not null) employee.LocationId = location.Id;
             }
 
             if (!string.IsNullOrWhiteSpace(row.Department))
@@ -214,19 +201,20 @@ public sealed class EmployeeImportService
                 {
                     department = new Department { CompanyId = companyId, Name = row.Department, IsActive = true };
                     db.Departments.Add(department);
+                    await db.SaveChangesAsync();
                     departments[row.Department] = department;
                 }
-                if (department is not null)
-                {
-                    await db.SaveChangesAsync();
-                    employee.DepartmentId = department.Id;
-                }
+                if (department is not null) employee.DepartmentId = department.Id;
             }
 
             await db.SaveChangesAsync();
 
-            if (duplicateMode == ImportDuplicateMode.Update && employee.Qualifications.Count > 0)
-                db.EmployeeQualifications.RemoveRange(employee.Qualifications);
+            if (isExisting && duplicateMode == ImportDuplicateMode.Update && employee.Qualifications.Count > 0)
+            {
+                db.EmployeeQualifications.RemoveRange(employee.Qualifications.ToList());
+                employee.Qualifications.Clear();
+                await db.SaveChangesAsync();
+            }
 
             foreach (var qualificationName in row.Qualifications)
             {
@@ -255,11 +243,7 @@ public sealed class EmployeeImportService
         return new EmployeeImportResult(created, updated, skipped, failed, messages);
     }
 
-    private static string Value(
-        ImportTable table,
-        IReadOnlyList<string> row,
-        IReadOnlyDictionary<string, string?> mapping,
-        string key)
+    private static string Value(ImportTable table, IReadOnlyList<string> row, IReadOnlyDictionary<string, string?> mapping, string key)
     {
         if (!mapping.TryGetValue(key, out var header) || string.IsNullOrWhiteSpace(header)) return string.Empty;
         var index = table.Headers.ToList().FindIndex(x => string.Equals(x, header, StringComparison.OrdinalIgnoreCase));
