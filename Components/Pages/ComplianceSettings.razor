@@ -1,0 +1,157 @@
+@page "/compliance-settings"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+
+<PageTitle>Compliance-Regeln | StepPilot</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <div>
+        <MudText Typo="Typo.h4">Compliance-Regeln</MudText>
+        <MudText Color="Color.Secondary">Unternehmensweite Arbeitszeitregeln und dokumentierte Ausnahmegrundlagen verwalten.</MudText>
+    </div>
+    <MudSpacer />
+    <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined">Regelprofil: @_profile.Name</MudChip>
+</MudStack>
+
+<MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+    StepPilot unterstützt die arbeitszeitrechtliche Prüfung, ersetzt aber keine juristische Bewertung. Abweichende Werte oder Ausnahmegrundlagen sollten nur hinterlegt werden, wenn dafür eine belastbare gesetzliche, tarifliche, betriebliche oder behördliche Grundlage besteht.
+</MudAlert>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_severity" Variant="Variant.Outlined" Class="mb-4">@_message</MudAlert>
+}
+
+<MudPaper Class="pa-5 mb-5" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-4">Arbeitszeitprofil</MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_profile.Name" Label="Profilname" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudNumericField T="decimal" @bind-Value="_profile.MinimumRestHours" Label="Mindestruhezeit (Stunden)" Variant="Variant.Outlined" Min="0" Max="24" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudNumericField T="decimal" @bind-Value="_profile.StandardDailyHours" Label="Regelmäßige tägliche Arbeitszeit (Stunden)" Variant="Variant.Outlined" Min="0" Max="24" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudNumericField T="decimal" @bind-Value="_profile.MaximumDailyHours" Label="Maximale tägliche Arbeitszeit (Stunden)" Variant="Variant.Outlined" Min="0" Max="24" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudNumericField T="int" @bind-Value="_profile.MinimumBreakAfter6HoursMinutes" Label="Mindestpause bei > 6 Std. (Minuten)" Variant="Variant.Outlined" Min="0" Max="180" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudNumericField T="int" @bind-Value="_profile.MinimumBreakAfter9HoursMinutes" Label="Mindestpause bei > 9 Std. (Minuten)" Variant="Variant.Outlined" Min="0" Max="180" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudNumericField T="int" @bind-Value="_profile.MinimumFreeSundaysPerYear" Label="Mindestens freie Sonntage pro Jahr" Variant="Variant.Outlined" Min="0" Max="53" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-5 mb-5" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-2">Ausnahmegrundlagen</MudText>
+    <MudText Color="Color.Secondary" Class="mb-4">Diese Schalter erlauben keine Beschäftigung automatisch. Sie dokumentieren lediglich, dass das Unternehmen eine konkrete Ausnahmegrundlage hinterlegt hat.</MudText>
+
+    <MudStack Spacing="3">
+        <MudSwitch T="bool" @bind-Value="_profile.SundayWorkExceptionConfigured" Color="Color.Primary" Label="Ausnahmegrundlage für Sonntagsarbeit dokumentiert" />
+        <MudSwitch T="bool" @bind-Value="_profile.HolidayWorkExceptionConfigured" Color="Color.Primary" Label="Ausnahmegrundlage für Feiertagsarbeit dokumentiert" />
+        <MudTextField @bind-Value="_profile.LegalBasisNote" Label="Rechts-/Tarif-/Betriebsgrundlage" Variant="Variant.Outlined" Lines="4" Placeholder="z. B. Tarifvertrag, Betriebsvereinbarung, Branchenregelung oder behördliche Bewilligung – inklusive interner Referenz" />
+    </MudStack>
+</MudPaper>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Regelprofil speichern</MudButton>
+
+@code {
+    private ComplianceProfile _profile = new();
+    private string _message = string.Empty;
+    private Severity _severity = Severity.Info;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _profile = await db.ComplianceProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.CompanyId == companyId)
+            ?? new ComplianceProfile { CompanyId = companyId };
+    }
+
+    private async Task SaveAsync()
+    {
+        _message = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_profile.Name))
+        {
+            SetError("Bitte einen Profilnamen angeben.");
+            return;
+        }
+
+        if (_profile.MinimumRestHours < 0 || _profile.MaximumDailyHours <= 0 || _profile.StandardDailyHours <= 0)
+        {
+            SetError("Die Arbeitszeitwerte sind ungültig.");
+            return;
+        }
+
+        if (_profile.StandardDailyHours > _profile.MaximumDailyHours)
+        {
+            SetError("Die regelmäßige tägliche Arbeitszeit darf nicht über dem maximalen Tageswert liegen.");
+            return;
+        }
+
+        if (_profile.MinimumBreakAfter6HoursMinutes < 0 ||
+            _profile.MinimumBreakAfter9HoursMinutes < _profile.MinimumBreakAfter6HoursMinutes)
+        {
+            SetError("Die Pausenwerte sind nicht plausibel.");
+            return;
+        }
+
+        if ((_profile.SundayWorkExceptionConfigured || _profile.HolidayWorkExceptionConfigured) &&
+            string.IsNullOrWhiteSpace(_profile.LegalBasisNote))
+        {
+            SetError("Für aktivierte Ausnahmegrundlagen muss eine nachvollziehbare Rechts-, Tarif-, Betriebs- oder Behördenreferenz hinterlegt werden.");
+            return;
+        }
+
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var existing = await db.ComplianceProfiles.FirstOrDefaultAsync(x => x.CompanyId == companyId);
+        if (existing is null)
+        {
+            _profile.CompanyId = companyId;
+            _profile.UpdatedAt = DateTime.UtcNow;
+            db.ComplianceProfiles.Add(_profile);
+        }
+        else
+        {
+            existing.Name = _profile.Name.Trim();
+            existing.IsActive = true;
+            existing.MinimumRestHours = _profile.MinimumRestHours;
+            existing.StandardDailyHours = _profile.StandardDailyHours;
+            existing.MaximumDailyHours = _profile.MaximumDailyHours;
+            existing.MinimumBreakAfter6HoursMinutes = _profile.MinimumBreakAfter6HoursMinutes;
+            existing.MinimumBreakAfter9HoursMinutes = _profile.MinimumBreakAfter9HoursMinutes;
+            existing.MinimumFreeSundaysPerYear = _profile.MinimumFreeSundaysPerYear;
+            existing.SundayWorkExceptionConfigured = _profile.SundayWorkExceptionConfigured;
+            existing.HolidayWorkExceptionConfigured = _profile.HolidayWorkExceptionConfigured;
+            existing.LegalBasisNote = _profile.LegalBasisNote?.Trim();
+            existing.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await db.SaveChangesAsync();
+
+        _profile = await db.ComplianceProfiles.AsNoTracking().FirstAsync(x => x.CompanyId == companyId);
+        _severity = Severity.Success;
+        _message = "Compliance-Regelprofil wurde gespeichert.";
+    }
+
+    private void SetError(string message)
+    {
+        _severity = Severity.Error;
+        _message = message;
+    }
+}
