@@ -1,0 +1,79 @@
+@page "/company-profile"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+@inject AuditLogService AuditLogService
+
+<PageTitle>Unternehmensprofil | StepPilot</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Unternehmensprofil</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Zentrale Unternehmensdaten und Onboarding-Status.</MudText>
+
+@if (_company is not null)
+{
+    <MudGrid>
+        <MudItem xs="12" lg="6">
+            <MudPaper Class="pa-5">
+                <MudText Typo="Typo.h6" Class="mb-4">Profil</MudText>
+                <MudTextField @bind-Value="_company.Name" Label="Unternehmensname" Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField @bind-Value="_company.Slug" Label="Mandantenkennung" Variant="Variant.Outlined" Disabled="true" />
+                <MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Speichern</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="6">
+            <MudPaper Class="pa-5">
+                <MudText Typo="Typo.h6" Class="mb-4">Onboarding</MudText>
+                @foreach (var item in Checklist)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+                        <MudIcon Icon="@(item.Done ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)" Color="@(item.Done ? Color.Success : Color.Secondary)" />
+                        <div><MudText>@item.Title</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">@item.Detail</MudText></div>
+                    </MudStack>
+                }
+                <MudProgressLinear Value="@Progress" Color="Color.Success" Rounded="true" Class="mt-4" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">@Progress% Einrichtung abgeschlossen</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private Company? _company;
+    private int _locations, _departments, _employees, _requirements;
+
+    private IEnumerable<(string Title, string Detail, bool Done)> Checklist =>
+    [
+        ("Unternehmensprofil", "Name und Mandant sind eingerichtet.", _company is not null && !string.IsNullOrWhiteSpace(_company.Name)),
+        ("Standorte", $"{_locations} Standort(e) angelegt.", _locations > 0),
+        ("Abteilungen", $"{_departments} Abteilung(en) angelegt.", _departments > 0),
+        ("Mitarbeiter", $"{_employees} Mitarbeiter importiert oder angelegt.", _employees > 0),
+        ("Personalbedarf", $"{_requirements} Bedarfsregel(n) definiert.", _requirements > 0)
+    ];
+
+    private int Progress => (int)Math.Round(Checklist.Count(x => x.Done) / 5m * 100m);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _company = await db.Companies.FirstAsync(x => x.Id == companyId);
+        _locations = await db.Locations.CountAsync(x => x.CompanyId == companyId);
+        _departments = await db.Departments.CountAsync(x => x.CompanyId == companyId);
+        _employees = await db.Employees.CountAsync(x => x.CompanyId == companyId);
+        _requirements = await db.StaffingRequirements.CountAsync(x => x.CompanyId == companyId && x.IsActive);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_company is null || string.IsNullOrWhiteSpace(_company.Name)) return;
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Companies.FirstAsync(x => x.Id == companyId);
+        entity.Name = _company.Name.Trim();
+        await db.SaveChangesAsync();
+        await AuditLogService.WriteAsync("Unternehmen", "Update", "Company", companyId.ToString(), "Unternehmensprofil aktualisiert.");
+        await LoadAsync();
+    }
+}
