@@ -1,0 +1,31 @@
+@page "/time-tracking"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+@using Microsoft.AspNetCore.Authorization
+@using StepPilot.Models
+@using StepPilot.Services
+@inject TimeTrackingService TimeTrackingService
+@inject CurrentUserService CurrentUserService
+
+<PageTitle>Zeiterfassung</PageTitle>
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4"><div><MudText Typo="Typo.h4">Zeiterfassung</MudText><MudText Color="Color.Secondary">Ist-Zeiten prüfen, korrigieren und freigeben.</MudText></div><MudButton StartIcon="@Icons.Material.Filled.Refresh" OnClick="Load">Aktualisieren</MudButton></MudStack>
+
+@if (_loading){<MudProgressLinear Indeterminate="true" />}
+else
+{
+<MudPaper Class="pa-4">
+<MudTable Items="_entries" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+<HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Ist</MudTh><MudTh>Status</MudTh><MudTh></MudTh></HeaderContent>
+<RowTemplate>
+<MudTd>@context.Employee?.FirstName @context.Employee?.LastName</MudTd><MudTd>@context.StartedAtLocal.ToString("dd.MM.yyyy")</MudTd><MudTd>@context.StartedAtLocal.ToString("HH:mm")</MudTd><MudTd>@(context.EndedAtLocal?.ToString("HH:mm")??"läuft")</MudTd><MudTd>@context.BreakMinutes min</MudTd><MudTd>@FormatHours(context.WorkedMinutes)</MudTd><MudTd><MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@context.Status</MudChip></MudTd><MudTd>@if(context.EndedAtLocal is not null && context.Status != TimeEntryStatus.Approved){<MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>Approve(context))">Freigeben</MudButton>}</MudTd>
+</RowTemplate></MudTable>
+</MudPaper>
+}
+
+@code{
+private bool _loading=true;private List<TimeEntry> _entries=[];
+protected override async Task OnInitializedAsync()=>await Load();
+private async Task Load(){_loading=true;var u=await CurrentUserService.GetAsync();if(u.CompanyId is not null)_entries=await TimeTrackingService.GetCompanyEntriesAsync(u.CompanyId.Value,DateOnly.FromDateTime(DateTime.Today.AddDays(-31)),DateOnly.FromDateTime(DateTime.Today));_loading=false;}
+private async Task Approve(TimeEntry e){var u=await CurrentUserService.GetAsync();await TimeTrackingService.ApproveAsync(e.Id,u.UserId);await Load();}
+private static string FormatHours(int m)=>$"{m/60}:{m%60:00} h";
+private static Color StatusColor(TimeEntryStatus s)=>s switch{TimeEntryStatus.Approved=>Color.Success,TimeEntryStatus.Running=>Color.Info,TimeEntryStatus.CorrectionRequired=>Color.Warning,_=>Color.Default};
+}
