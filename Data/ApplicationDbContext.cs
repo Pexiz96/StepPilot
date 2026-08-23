@@ -25,6 +25,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<EmployeeShiftPreference> EmployeeShiftPreferences => Set<EmployeeShiftPreference>();
     public DbSet<OpenShiftRequest> OpenShiftRequests => Set<OpenShiftRequest>();
     public DbSet<ShiftSwapRequest> ShiftSwapRequests => Set<ShiftSwapRequest>();
+    public DbSet<ComplianceProfile> ComplianceProfiles => Set<ComplianceProfile>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -68,6 +69,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<Employee>().Property(x => x.WeeklyHours).HasPrecision(5, 2);
+        builder.Entity<ComplianceProfile>().Property(x => x.MinimumRestHours).HasPrecision(5, 2);
+        builder.Entity<ComplianceProfile>().Property(x => x.StandardDailyHours).HasPrecision(5, 2);
+        builder.Entity<ComplianceProfile>().Property(x => x.MaximumDailyHours).HasPrecision(5, 2);
+        builder.Entity<ComplianceProfile>().HasIndex(x => x.CompanyId).IsUnique();
 
         builder.Entity<EmployeeShiftPreference>().HasKey(x => new { x.EmployeeId, x.ShiftTemplateId });
         builder.Entity<EmployeeShiftPreference>()
