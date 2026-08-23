@@ -1,15 +1,13 @@
 @page "/my-time-tracking"
 @attribute [Authorize(Roles = AppRoles.Employee)]
 @using Microsoft.AspNetCore.Authorization
-@using StepPilot.Data
 @using StepPilot.Models
 @using StepPilot.Services
 @inject TimeTrackingService TimeTrackingService
-@inject CurrentUserService CurrentUserService
 
 <PageTitle>Meine Zeiterfassung</PageTitle>
 <MudText Typo="Typo.h4" GutterBottom="true">Meine Zeiterfassung</MudText>
-<MudText Color="Color.Secondary" Class="mb-4">Arbeitszeit starten, Pausen dokumentieren und den Arbeitstag beenden.</MudText>
+<MudText Color="Color.Secondary" Class="mb-4">Arbeitszeit starten, Pausen dokumentieren und Soll-/Ist-Zeiten im Blick behalten.</MudText>
 
 @if (_loading)
 {
@@ -21,8 +19,20 @@ else if (_employeeId is null)
 }
 else
 {
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-4">@_error</MudAlert>
+    }
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Sollzeit (30 Tage)</MudText><MudText Typo="Typo.h5">@FormatHours(_summary?.PlannedMinutes ?? 0)</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Istzeit</MudText><MudText Typo="Typo.h5">@FormatHours(_summary?.WorkedMinutes ?? 0)</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Zeitkonto</MudText><MudText Typo="Typo.h5" Color="@((_summary?.DifferenceMinutes ?? 0) >= 0 ? Color.Success : Color.Warning)">@FormatSignedHours(_summary?.DifferenceMinutes ?? 0)</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Compliance-Hinweise</MudText><MudText Typo="Typo.h5" Color="@((_summary?.ComplianceWarnings ?? 0) == 0 ? Color.Success : Color.Warning)">@(_summary?.ComplianceWarnings ?? 0)</MudText></MudPaper></MudItem>
+    </MudGrid>
+
     <MudGrid>
-        <MudItem xs="12" md="5">
+        <MudItem xs="12" md="4">
             <MudPaper Class="pa-5">
                 <MudText Typo="Typo.h6">Heute</MudText>
                 @if (_active is null)
@@ -37,15 +47,37 @@ else
                     <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="ClockOut">Arbeitszeit beenden</MudButton>
                 }
             </MudPaper>
+
+            @if (_findings.Count > 0)
+            {
+                <MudPaper Class="pa-4 mt-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Compliance</MudText>
+                    @foreach (var finding in _findings.Take(6))
+                    {
+                        <MudAlert Severity="@(finding.Severity == "Fehler" ? Severity.Error : Severity.Warning)" Variant="Variant.Outlined" Class="mb-2">
+                            @finding.Message <MudText Typo="Typo.caption">@finding.Reference</MudText>
+                        </MudAlert>
+                    }
+                </MudPaper>
+            }
         </MudItem>
-        <MudItem xs="12" md="7">
+
+        <MudItem xs="12" md="8">
             <MudPaper Class="pa-5">
                 <MudText Typo="Typo.h6" GutterBottom="true">Letzte Buchungen</MudText>
-                <MudTable Items="_entries" Dense="true" Hover="true">
-                    <HeaderContent><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Ist</MudTh><MudTh>Status</MudTh></HeaderContent>
+                <MudTable Items="_entries" Dense="true" Hover="true" RowsPerPage="15">
+                    <HeaderContent><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Soll</MudTh><MudTh>Ist</MudTh><MudTh>Abweichung</MudTh><MudTh>Status</MudTh></HeaderContent>
                     <RowTemplate>
-                        <MudTd>@context.StartedAtLocal.ToString("dd.MM.yyyy")</MudTd><MudTd>@context.StartedAtLocal.ToString("HH:mm")</MudTd><MudTd>@(context.EndedAtLocal?.ToString("HH:mm") ?? "–")</MudTd><MudTd>@context.BreakMinutes min</MudTd><MudTd>@FormatHours(context.WorkedMinutes)</MudTd><MudTd>@context.Status</MudTd>
+                        <MudTd>@context.StartedAtLocal.ToString("dd.MM.yyyy")</MudTd>
+                        <MudTd>@context.StartedAtLocal.ToString("HH:mm")</MudTd>
+                        <MudTd>@(context.EndedAtLocal?.ToString("HH:mm") ?? "–")</MudTd>
+                        <MudTd>@context.BreakMinutes min</MudTd>
+                        <MudTd>@(context.Shift is null ? "–" : FormatHours(context.PlannedMinutes))</MudTd>
+                        <MudTd>@FormatHours(context.WorkedMinutes)</MudTd>
+                        <MudTd>@(context.Shift is null ? "–" : FormatSignedHours(context.VarianceMinutes))</MudTd>
+                        <MudTd>@StatusText(context.Status)</MudTd>
                     </RowTemplate>
+                    <PagerContent><MudTablePager PageSizeOptions="new int[] { 15, 30, 60 }" /></PagerContent>
                 </MudTable>
             </MudPaper>
         </MudItem>
@@ -53,10 +85,49 @@ else
 }
 
 @code {
-    private bool _loading = true; private int? _employeeId; private TimeEntry? _active; private List<TimeEntry> _entries = []; private int _breakMinutes;
-    protected override async Task OnInitializedAsync(){var current=await CurrentUserService.GetAsync();_employeeId=current.EmployeeId;if(_employeeId is not null)await Reload();_loading=false;}
-    private async Task Reload(){if(_employeeId is null)return;_active=await TimeTrackingService.GetActiveAsync(_employeeId.Value);_entries=await TimeTrackingService.GetForEmployeeAsync(_employeeId.Value,DateOnly.FromDateTime(DateTime.Today.AddDays(-30)),DateOnly.FromDateTime(DateTime.Today));_breakMinutes=_active?.BreakMinutes??0;}
-    private async Task ClockIn(){if(_employeeId is null)return;await TimeTrackingService.ClockInAsync(_employeeId.Value);await Reload();}
-    private async Task ClockOut(){if(_active is null)return;await TimeTrackingService.ClockOutAsync(_active.Id,_breakMinutes);await Reload();}
-    private static string FormatHours(int minutes)=>$"{minutes/60}:{minutes%60:00} h";
+    private bool _loading = true;
+    private int? _employeeId;
+    private TimeEntry? _active;
+    private List<TimeEntry> _entries = [];
+    private List<TimeComplianceFinding> _findings = [];
+    private TimeTrackingSummary? _summary;
+    private int _breakMinutes;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _employeeId = await TimeTrackingService.GetCurrentEmployeeIdAsync();
+        if (_employeeId is not null) await Reload();
+        _loading = false;
+    }
+
+    private async Task Reload()
+    {
+        if (_employeeId is null) return;
+        var from = DateOnly.FromDateTime(DateTime.Today.AddDays(-30));
+        var to = DateOnly.FromDateTime(DateTime.Today);
+        _active = await TimeTrackingService.GetActiveAsync(_employeeId.Value);
+        _entries = await TimeTrackingService.GetForEmployeeAsync(_employeeId.Value, from, to);
+        _summary = await TimeTrackingService.GetSummaryAsync(_employeeId.Value, from, to);
+        _findings = await TimeTrackingService.EvaluateActualComplianceAsync(_employeeId.Value, from, to);
+        _breakMinutes = _active?.BreakMinutes ?? 0;
+    }
+
+    private async Task ClockIn()
+    {
+        if (_employeeId is null) return;
+        try { _error = null; await TimeTrackingService.ClockInAsync(_employeeId.Value); await Reload(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task ClockOut()
+    {
+        if (_active is null) return;
+        try { _error = null; await TimeTrackingService.ClockOutAsync(_active.Id, _breakMinutes); await Reload(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string FormatHours(int minutes) => $"{Math.Abs(minutes) / 60}:{Math.Abs(minutes) % 60:00} h";
+    private static string FormatSignedHours(int minutes) => $"{(minutes >= 0 ? "+" : "-")}{Math.Abs(minutes) / 60}:{Math.Abs(minutes) % 60:00} h";
+    private static string StatusText(TimeEntryStatus status) => status switch { TimeEntryStatus.Running => "Läuft", TimeEntryStatus.Submitted => "Eingereicht", TimeEntryStatus.Approved => "Freigegeben", TimeEntryStatus.Rejected => "Abgelehnt", _ => status.ToString() };
 }
