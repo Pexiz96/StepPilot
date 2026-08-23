@@ -2,13 +2,14 @@
 @attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
 @using Microsoft.AspNetCore.Components.Forms
 @inject EmployeeImportFileService ImportFileService
+@inject EmployeeImportService ImportService
 
 <PageTitle>Mitarbeiter importieren | StepPilot</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-5">
     <div>
         <MudText Typo="Typo.h4">Mitarbeiter importieren</MudText>
-        <MudText Color="Color.Secondary">CSV, TXT oder Excel hochladen, Spalten zuordnen und vor dem Import prüfen.</MudText>
+        <MudText Color="Color.Secondary">CSV, TXT oder Excel hochladen, Spalten zuordnen, prüfen und anschließend gesammelt importieren.</MudText>
     </div>
 </MudStack>
 
@@ -19,12 +20,10 @@
             Unterstützt werden .csv, .txt und .xlsx bis 20 MB. Die erste Zeile wird als Spaltenüberschrift verwendet.
         </MudText>
         <InputFile OnChange="ReadFileAsync" accept=".csv,.txt,.xlsx" />
-
         @if (_loading)
         {
             <MudProgressLinear Indeterminate="true" Class="mt-2" />
         }
-
         @if (!string.IsNullOrWhiteSpace(_error))
         {
             <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
@@ -47,7 +46,7 @@
         </MudStack>
 
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
-            StepPilot versucht die Spalten automatisch zu erkennen. Vorname, Nachname und Personalnummer sind für den späteren Import Pflichtfelder. Andere Felder können leer bleiben.
+            StepPilot versucht die Spalten automatisch zu erkennen. Vorname, Nachname und Personalnummer sind Pflichtfelder.
         </MudAlert>
 
         <MudGrid>
@@ -65,42 +64,95 @@
         </MudGrid>
     </MudPaper>
 
-    <MudPaper Class="pa-5">
+    <MudPaper Class="pa-5 mb-5">
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
             <div>
-                <MudText Typo="Typo.h6">3. Vorschau</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Die ersten @Math.Min(10, _table.Rows.Count) Zeilen aus der Datei.</MudText>
+                <MudText Typo="Typo.h6">3. Vorschau und Validierung</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Prüft Pflichtfelder, E-Mail-Adressen, Wochenstunden und doppelte Personalnummern.</MudText>
             </div>
             <MudSpacer />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_mappingReady)" StartIcon="@Icons.Material.Filled.ArrowForward">
-                Validierung vorbereiten
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_mappingReady || _loading)" StartIcon="@Icons.Material.Filled.FactCheck" OnClick="ValidateAsync">
+                Daten prüfen
             </MudButton>
         </MudStack>
 
         <div style="overflow-x:auto">
             <table class="sp-import-table">
-                <thead>
-                    <tr>
-                        @foreach (var header in _table.Headers)
-                        {
-                            <th>@header</th>
-                        }
-                    </tr>
-                </thead>
+                <thead><tr>@foreach (var header in _table.Headers){<th>@header</th>}</tr></thead>
                 <tbody>
                     @foreach (var row in _table.Rows.Take(10))
                     {
-                        <tr>
-                            @for (var i = 0; i < _table.Headers.Count; i++)
-                            {
-                                <td>@(i < row.Count ? row[i] : string.Empty)</td>
-                            }
-                        </tr>
+                        <tr>@for (var i = 0; i < _table.Headers.Count; i++){<td>@(i < row.Count ? row[i] : string.Empty)</td>}</tr>
                     }
                 </tbody>
             </table>
         </div>
     </MudPaper>
+}
+
+@if (_preview is not null)
+{
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Importierbar</MudText><MudText Typo="Typo.h4">@_preview.ValidCount</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Fehlerhafte Zeilen</MudText><MudText Typo="Typo.h4" Color="Color.Error">@_preview.ErrorCount</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="4"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Bereits vorhanden</MudText><MudText Typo="Typo.h4" Color="Color.Warning">@_preview.ExistingCount</MudText></MudPaper></MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-5 mb-5">
+        <MudText Typo="Typo.h6" Class="mb-3">Validierungsergebnis</MudText>
+        <MudTable Items="_preview.Rows" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Zeile</MudTh><MudTh>Personalnummer</MudTh><MudTh>Mitarbeiter</MudTh><MudTh>Standort</MudTh><MudTh>Status</MudTh><MudTh>Hinweise</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.RowNumber</MudTd>
+                <MudTd>@context.EmployeeNumber</MudTd>
+                <MudTd>@context.FirstName @context.LastName</MudTd>
+                <MudTd>@(context.Location ?? "—")</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@(context.IsValid ? (context.ExistsInDatabase ? Color.Warning : Color.Success) : Color.Error)">
+                        @(context.IsValid ? (context.ExistsInDatabase ? "Vorhanden" : "Bereit") : "Fehler")
+                    </MudChip>
+                </MudTd>
+                <MudTd>
+                    @if (context.Errors.Count > 0){<MudText Typo="Typo.caption" Color="Color.Error">@string.Join(" ", context.Errors)</MudText>}
+                    @if (context.Warnings.Count > 0){<MudText Typo="Typo.caption" Color="Color.Warning">@string.Join(" ", context.Warnings)</MudText>}
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+
+    <MudPaper Class="pa-5 mb-5">
+        <MudText Typo="Typo.h6" Class="mb-3">4. Import ausführen</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudSelect T="ImportDuplicateMode" Label="Vorhandene Personalnummern" @bind-Value="_duplicateMode" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@ImportDuplicateMode.Skip">Überspringen</MudSelectItem>
+                    <MudSelectItem Value="@ImportDuplicateMode.Update">Vorhandene Mitarbeiter aktualisieren</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudCheckBox T="bool" @bind-Value="_createMissingMasterData" Label="Fehlende Standorte, Abteilungen und Qualifikationen automatisch anlegen" />
+            </MudItem>
+        </MudGrid>
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="my-4">
+            Fehlerhafte Zeilen werden nicht importiert. Bei „Aktualisieren“ werden die importierten Stammdaten des vorhandenen Mitarbeiters überschrieben.
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Upload" Disabled="@(_loading || _preview.ValidCount == 0)" OnClick="ImportAsync">
+            @_preview.ValidCount Mitarbeiter verarbeiten
+        </MudButton>
+    </MudPaper>
+}
+
+@if (_result is not null)
+{
+    <MudAlert Severity="@(_result.Failed == 0 ? Severity.Success : Severity.Warning)" Variant="Variant.Filled" Class="mb-4">
+        Import abgeschlossen: @_result.Created neu angelegt, @_result.Updated aktualisiert, @_result.Skipped übersprungen, @_result.Failed fehlerhaft.
+    </MudAlert>
+    @foreach (var message in _result.Messages.Take(20))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-2">@message</MudAlert>
+    }
 }
 
 <style>
@@ -109,55 +161,58 @@
 
 @code {
     private ImportTable? _table;
+    private EmployeeImportPreview? _preview;
+    private EmployeeImportResult? _result;
     private bool _loading;
     private string? _error;
+    private ImportDuplicateMode _duplicateMode = ImportDuplicateMode.Skip;
+    private bool _createMissingMasterData = true;
     private Dictionary<string, string?> _mapping = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly (string Key, string Label)[] _targets =
     [
-        ("EmployeeNumber", "Personalnummer *"),
-        ("FirstName", "Vorname *"),
-        ("LastName", "Nachname *"),
-        ("Email", "E-Mail"),
-        ("PhoneNumber", "Telefon"),
-        ("WeeklyHours", "Wochenstunden"),
-        ("Position", "Position"),
-        ("Location", "Standort"),
-        ("Department", "Abteilung"),
+        ("EmployeeNumber", "Personalnummer *"), ("FirstName", "Vorname *"), ("LastName", "Nachname *"),
+        ("Email", "E-Mail"), ("PhoneNumber", "Telefon"), ("WeeklyHours", "Wochenstunden"),
+        ("Position", "Position"), ("Location", "Standort"), ("Department", "Abteilung"),
         ("Qualifications", "Qualifikationen")
     ];
 
-    private bool _mappingReady =>
-        !string.IsNullOrWhiteSpace(Mapping("EmployeeNumber")) &&
-        !string.IsNullOrWhiteSpace(Mapping("FirstName")) &&
-        !string.IsNullOrWhiteSpace(Mapping("LastName"));
+    private bool _mappingReady => !string.IsNullOrWhiteSpace(Mapping("EmployeeNumber")) && !string.IsNullOrWhiteSpace(Mapping("FirstName")) && !string.IsNullOrWhiteSpace(Mapping("LastName"));
 
     private async Task ReadFileAsync(InputFileChangeEventArgs args)
     {
-        _loading = true;
-        _error = null;
-        _table = null;
-        _mapping.Clear();
-
+        _loading = true; _error = null; _table = null; _preview = null; _result = null; _mapping.Clear();
         try
         {
             _table = await ImportFileService.ReadAsync(args.File);
             _mapping = ImportFileService.SuggestMappings(_table.Headers);
         }
-        catch (Exception ex)
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task ValidateAsync()
+    {
+        if (_table is null) return;
+        _loading = true; _error = null; _result = null;
+        try { _preview = await ImportService.ValidateAsync(_table, _mapping); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_preview is null) return;
+        _loading = true; _error = null;
+        try
         {
-            _error = ex.Message;
+            _result = await ImportService.ImportAsync(_preview, _duplicateMode, _createMissingMasterData);
+            if (_table is not null) _preview = await ImportService.ValidateAsync(_table, _mapping);
         }
-        finally
-        {
-            _loading = false;
-        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
     }
 
     private string? Mapping(string key) => _mapping.TryGetValue(key, out var value) ? value : null;
-
-    private void SetMapping(string key, string? value)
-    {
-        _mapping[key] = value;
-    }
+    private void SetMapping(string key, string? value) { _mapping[key] = value; _preview = null; _result = null; }
 }
