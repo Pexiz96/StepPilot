@@ -59,6 +59,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<Department>().HasOne(x => x.Company).WithMany()
             .HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<Shift>().HasOne(x => x.Department).WithMany()
+            .HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<Employee>().Property(x => x.WeeklyHours).HasPrecision(5, 2);
         builder.Entity<ComplianceProfile>().Property(x => x.MinimumRestHours).HasPrecision(5, 2);
