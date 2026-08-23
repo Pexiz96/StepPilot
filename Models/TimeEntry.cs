@@ -31,10 +31,13 @@ public class TimeEntry : TenantEntity
 
     public bool IsManualCorrection { get; set; }
     public string? CorrectionReason { get; set; }
+    public string? RejectionReason { get; set; }
     public string? ApprovedByUserId { get; set; }
     public DateTime? ApprovedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public ICollection<TimeEntryRevision> Revisions { get; set; } = new List<TimeEntryRevision>();
 
     public DateTime StartedAtLocal => ClockInUtc.ToLocalTime();
     public DateTime? EndedAtLocal => ClockOutUtc?.ToLocalTime();
