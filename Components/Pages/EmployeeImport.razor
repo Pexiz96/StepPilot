@@ -1,8 +1,10 @@
 @page "/employee-import"
 @attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
 @using Microsoft.AspNetCore.Components.Forms
+@using StepPilot.Models
 @inject EmployeeImportFileService ImportFileService
 @inject EmployeeImportService ImportService
+@inject EmployeeImportHistoryService ImportHistoryService
 
 <PageTitle>Mitarbeiter importieren | StepPilot</PageTitle>
 
@@ -100,7 +102,7 @@
 
     <MudPaper Class="pa-5 mb-5">
         <MudText Typo="Typo.h6" Class="mb-3">Validierungsergebnis</MudText>
-        <MudTable Items="_preview.Rows" Dense="true" Hover="true">
+        <MudTable Items="_preview.Rows" Dense="true" Hover="true" RowsPerPage="25">
             <HeaderContent>
                 <MudTh>Zeile</MudTh><MudTh>Personalnummer</MudTh><MudTh>Mitarbeiter</MudTh><MudTh>Standort</MudTh><MudTh>Status</MudTh><MudTh>Hinweise</MudTh>
             </HeaderContent>
@@ -119,6 +121,7 @@
                     @if (context.Warnings.Count > 0){<MudText Typo="Typo.caption" Color="Color.Warning">@string.Join(" ", context.Warnings)</MudText>}
                 </MudTd>
             </RowTemplate>
+            <PagerContent><MudTablePager PageSizeOptions="new int[] { 25, 50, 100 }" /></PagerContent>
         </MudTable>
     </MudPaper>
 
@@ -149,10 +152,38 @@
     <MudAlert Severity="@(_result.Failed == 0 ? Severity.Success : Severity.Warning)" Variant="Variant.Filled" Class="mb-4">
         Import abgeschlossen: @_result.Created neu angelegt, @_result.Updated aktualisiert, @_result.Skipped übersprungen, @_result.Failed fehlerhaft.
     </MudAlert>
-    @foreach (var message in _result.Messages.Take(20))
+    @foreach (var message in _result.Messages.Take(100))
     {
         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-2">@message</MudAlert>
     }
+}
+
+@if (_history.Count > 0)
+{
+    <MudPaper Class="pa-5 mt-5">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+            <div>
+                <MudText Typo="Typo.h6">Import-Historie</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Die letzten Importläufe dieses Unternehmens.</MudText>
+            </div>
+            <MudSpacer />
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadHistoryAsync">Aktualisieren</MudButton>
+        </MudStack>
+        <MudTable Items="_history" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Zeitpunkt</MudTh><MudTh>Datei</MudTh><MudTh>Zeilen</MudTh><MudTh>Neu</MudTh><MudTh>Aktualisiert</MudTh><MudTh>Übersprungen</MudTh><MudTh>Fehler</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.FinishedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudTd>
+                <MudTd>@context.FileName</MudTd>
+                <MudTd>@context.TotalRows</MudTd>
+                <MudTd>@context.Created</MudTd>
+                <MudTd>@context.Updated</MudTd>
+                <MudTd>@context.Skipped</MudTd>
+                <MudTd><MudText Color="@(context.Failed > 0 ? Color.Error : Color.Success)">@context.Failed</MudText></MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
 }
 
 <style>
@@ -163,6 +194,7 @@
     private ImportTable? _table;
     private EmployeeImportPreview? _preview;
     private EmployeeImportResult? _result;
+    private List<EmployeeImportRun> _history = [];
     private bool _loading;
     private string? _error;
     private ImportDuplicateMode _duplicateMode = ImportDuplicateMode.Skip;
@@ -178,6 +210,14 @@
     ];
 
     private bool _mappingReady => !string.IsNullOrWhiteSpace(Mapping("EmployeeNumber")) && !string.IsNullOrWhiteSpace(Mapping("FirstName")) && !string.IsNullOrWhiteSpace(Mapping("LastName"));
+
+    protected override async Task OnInitializedAsync() => await LoadHistoryAsync();
+
+    private async Task LoadHistoryAsync()
+    {
+        try { _history = await ImportHistoryService.GetRecentAsync(); }
+        catch { _history = []; }
+    }
 
     private async Task ReadFileAsync(InputFileChangeEventArgs args)
     {
@@ -202,12 +242,15 @@
 
     private async Task ImportAsync()
     {
-        if (_preview is null) return;
+        if (_preview is null || _table is null) return;
         _loading = true; _error = null;
+        var startedAtUtc = DateTime.UtcNow;
         try
         {
             _result = await ImportService.ImportAsync(_preview, _duplicateMode, _createMissingMasterData);
-            if (_table is not null) _preview = await ImportService.ValidateAsync(_table, _mapping);
+            await ImportHistoryService.RecordAsync(_table.FileName, _table.Rows.Count, _result, _duplicateMode, _createMissingMasterData, startedAtUtc);
+            _history = await ImportHistoryService.GetRecentAsync();
+            _preview = await ImportService.ValidateAsync(_table, _mapping);
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; }
