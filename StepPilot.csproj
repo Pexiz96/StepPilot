@@ -8,6 +8,10 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
@@ -18,9 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="wwwroot\NewFolder1\" />
-    <Folder Include="wwwroot\NewFolder2\" />
-    <Folder Include="wwwroot\NewFolder\" />
+    <Compile Remove="StepPilot.Tests/**/*.cs" />
+    <EmbeddedResource Remove="StepPilot.Tests/**/*" />
+    <Content Remove="StepPilot.Tests/**/*" />
+    <None Remove="StepPilot.Tests/**/*" />
   </ItemGroup>
 
 </Project>
