@@ -23,6 +23,10 @@ else
     {
         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-4">@_error</MudAlert>
     }
+    @if (!string.IsNullOrWhiteSpace(_success))
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-4">@_success</MudAlert>
+    }
 
     <MudGrid Class="mb-4">
         <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Sollzeit (30 Tage)</MudText><MudText Typo="Typo.h5">@FormatHours(_summary?.PlannedMinutes ?? 0)</MudText></MudPaper></MudItem>
@@ -54,7 +58,7 @@ else
                     <MudText Typo="Typo.h6" Class="mb-3">Compliance</MudText>
                     @foreach (var finding in _findings.Take(6))
                     {
-                        <MudAlert Severity="@(finding.Severity == "Fehler" ? Severity.Error : Severity.Warning)" Variant="Variant.Outlined" Class="mb-2">
+                        <MudAlert Severity="@(finding.Severity == "Fehler" ? Severity.Error : finding.Severity == "Warnung" ? Severity.Warning : Severity.Info)" Variant="Variant.Outlined" Class="mb-2">
                             @finding.Message <MudText Typo="Typo.caption">@finding.Reference</MudText>
                         </MudAlert>
                     }
@@ -66,7 +70,7 @@ else
             <MudPaper Class="pa-5">
                 <MudText Typo="Typo.h6" GutterBottom="true">Letzte Buchungen</MudText>
                 <MudTable Items="_entries" Dense="true" Hover="true" RowsPerPage="15">
-                    <HeaderContent><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Soll</MudTh><MudTh>Ist</MudTh><MudTh>Abweichung</MudTh><MudTh>Status</MudTh></HeaderContent>
+                    <HeaderContent><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Soll</MudTh><MudTh>Ist</MudTh><MudTh>Abweichung</MudTh><MudTh>Status</MudTh><MudTh></MudTh></HeaderContent>
                     <RowTemplate>
                         <MudTd>@context.StartedAtLocal.ToString("dd.MM.yyyy")</MudTd>
                         <MudTd>@context.StartedAtLocal.ToString("HH:mm")</MudTd>
@@ -75,7 +79,19 @@ else
                         <MudTd>@(context.Shift is null ? "–" : FormatHours(context.PlannedMinutes))</MudTd>
                         <MudTd>@FormatHours(context.WorkedMinutes)</MudTd>
                         <MudTd>@(context.Shift is null ? "–" : FormatSignedHours(context.VarianceMinutes))</MudTd>
-                        <MudTd>@StatusText(context.Status)</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@StatusText(context.Status)</MudChip>
+                            @if (context.Status == TimeEntryStatus.Rejected && !string.IsNullOrWhiteSpace(context.RejectionReason))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error" Class="mt-1">@context.RejectionReason</MudText>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            @if (context.Status == TimeEntryStatus.Rejected)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => Resubmit(context.Id))">Erneut einreichen</MudButton>
+                            }
+                        </MudTd>
                     </RowTemplate>
                     <PagerContent><MudTablePager PageSizeOptions="new int[] { 15, 30, 60 }" /></PagerContent>
                 </MudTable>
@@ -93,6 +109,7 @@ else
     private TimeTrackingSummary? _summary;
     private int _breakMinutes;
     private string? _error;
+    private string? _success;
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,18 +133,25 @@ else
     private async Task ClockIn()
     {
         if (_employeeId is null) return;
-        try { _error = null; await TimeTrackingService.ClockInAsync(_employeeId.Value); await Reload(); }
+        try { _error = null; _success = null; await TimeTrackingService.ClockInAsync(_employeeId.Value); _success = "Arbeitszeit wurde gestartet."; await Reload(); }
         catch (Exception ex) { _error = ex.Message; }
     }
 
     private async Task ClockOut()
     {
         if (_active is null) return;
-        try { _error = null; await TimeTrackingService.ClockOutAsync(_active.Id, _breakMinutes); await Reload(); }
+        try { _error = null; _success = null; await TimeTrackingService.ClockOutAsync(_active.Id, _breakMinutes); _success = "Arbeitszeit wurde beendet und zur Freigabe eingereicht."; await Reload(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task Resubmit(int id)
+    {
+        try { _error = null; _success = null; await TimeTrackingService.ResubmitAsync(id); _success = "Zeitbuchung wurde erneut eingereicht."; await Reload(); }
         catch (Exception ex) { _error = ex.Message; }
     }
 
     private static string FormatHours(int minutes) => $"{Math.Abs(minutes) / 60}:{Math.Abs(minutes) % 60:00} h";
     private static string FormatSignedHours(int minutes) => $"{(minutes >= 0 ? "+" : "-")}{Math.Abs(minutes) / 60}:{Math.Abs(minutes) % 60:00} h";
+    private static Color StatusColor(TimeEntryStatus status) => status switch { TimeEntryStatus.Approved => Color.Success, TimeEntryStatus.Running => Color.Info, TimeEntryStatus.Rejected => Color.Error, _ => Color.Warning };
     private static string StatusText(TimeEntryStatus status) => status switch { TimeEntryStatus.Running => "Läuft", TimeEntryStatus.Submitted => "Eingereicht", TimeEntryStatus.Approved => "Freigegeben", TimeEntryStatus.Rejected => "Abgelehnt", _ => status.ToString() };
 }
