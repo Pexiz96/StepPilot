@@ -138,6 +138,9 @@
                 <MudCheckBox T="bool" @bind-Value="_createMissingMasterData" Label="Fehlende Standorte, Abteilungen und Qualifikationen automatisch anlegen" />
             </MudItem>
         </MudGrid>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+            Große Importe werden intern in Abfrageblöcken verarbeitet und Änderungen gesammelt gespeichert. Dadurch bleibt der Import auch bei mehreren tausend Datensätzen performant.
+        </MudAlert>
         <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="my-4">
             Fehlerhafte Zeilen werden nicht importiert. Bei „Aktualisieren“ werden die importierten Stammdaten des vorhandenen Mitarbeiters überschrieben.
         </MudAlert>
@@ -154,7 +157,7 @@
     </MudAlert>
     @foreach (var message in _result.Messages.Take(100))
     {
-        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-2">@message</MudAlert>
+        <MudAlert Severity="@(message.Contains("nicht importiert", StringComparison.OrdinalIgnoreCase) ? Severity.Error : Severity.Warning)" Variant="Variant.Outlined" Class="mb-2">@message</MudAlert>
     }
 }
 
