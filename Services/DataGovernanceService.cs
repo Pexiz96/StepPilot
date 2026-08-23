@@ -104,37 +104,15 @@ public sealed class DataGovernanceService(
             .OrderBy(x => x.StartDate)
             .ToListAsync();
 
-        var timeEntries = await db.TimeEntries.AsNoTracking()
+        var timeEntryEntities = await db.TimeEntries.AsNoTracking()
             .Where(x => x.CompanyId == companyId && x.EmployeeId == employeeId)
             .OrderBy(x => x.ClockInUtc)
-            .Select(x => new
-            {
-                x.Id,
-                x.ClockInUtc,
-                x.ClockOutUtc,
-                x.BreakMinutes,
-                Status = x.Status.ToString(),
-                x.IsManualCorrection,
-                x.CorrectionReason,
-                x.RejectionReason,
-                x.LocationId,
-                x.DepartmentId,
-                x.ShiftId
-            })
             .ToListAsync();
 
-        var assignments = await db.ShiftAssignments.AsNoTracking()
+        var assignmentEntities = await db.ShiftAssignments.AsNoTracking()
             .Include(x => x.Shift)
             .Where(x => x.CompanyId == companyId && x.EmployeeId == employeeId)
             .OrderBy(x => x.Shift!.Date)
-            .Select(x => new
-            {
-                x.Id,
-                x.ShiftId,
-                Date = x.Shift != null ? x.Shift.Date : (DateOnly?)null,
-                StartTime = x.Shift != null ? x.Shift.StartTime : (TimeOnly?)null,
-                EndTime = x.Shift != null ? x.Shift.EndTime : (TimeOnly?)null
-            })
             .ToListAsync();
 
         var payload = new
@@ -158,9 +136,29 @@ public sealed class DataGovernanceService(
                 AdditionalLocations = employee.AdditionalLocations.Select(x => x.Location?.Name).Where(x => x is not null).ToArray(),
                 Qualifications = employee.Qualifications.Select(x => x.Qualification?.Name).Where(x => x is not null).ToArray()
             },
-            Absences = absences.Select(x => new { x.Id, x.StartDate, x.EndDate, Type = x.Type.ToString(), Status = x.Status.ToString(), x.Reason }),
-            TimeEntries = timeEntries,
-            ShiftAssignments = assignments
+            Absences = absences.Select(x => new { x.Id, x.StartDate, x.EndDate, Type = x.Type.ToString(), Status = x.Status.ToString(), x.Reason }).ToArray(),
+            TimeEntries = timeEntryEntities.Select(x => new
+            {
+                x.Id,
+                x.ClockInUtc,
+                x.ClockOutUtc,
+                x.BreakMinutes,
+                Status = x.Status.ToString(),
+                x.IsManualCorrection,
+                x.CorrectionReason,
+                x.RejectionReason,
+                x.LocationId,
+                x.DepartmentId,
+                x.ShiftId
+            }).ToArray(),
+            ShiftAssignments = assignmentEntities.Select(x => new
+            {
+                x.Id,
+                x.ShiftId,
+                Date = x.Shift?.Date,
+                StartTime = x.Shift?.StartTime,
+                EndTime = x.Shift?.EndTime
+            }).ToArray()
         };
 
         await auditLog.WriteAsync(
