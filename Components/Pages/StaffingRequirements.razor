@@ -1,0 +1,97 @@
+@page "/staffing-requirements"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject TenantGuard TenantGuard
+@inject AuditLogService AuditLogService
+
+<PageTitle>Personalbedarf | StepPilot</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <div>
+        <MudText Typo="Typo.h4">Personalbedarf</MudText>
+        <MudText Color="Color.Secondary">Definiere wiederkehrende Soll-Besetzungen nach Wochentag, Standort, Abteilung und Qualifikation.</MudText>
+    </div>
+</MudStack>
+
+<MudPaper Class="pa-4 mb-5">
+    <MudText Typo="Typo.h6" Class="mb-4">Bedarfsregel</MudText>
+    <MudGrid>
+        <MudItem xs="12" md="3"><MudTextField @bind-Value="_edit.Name" Label="Bezeichnung" Variant="Variant.Outlined" /></MudItem>
+        <MudItem xs="12" md="3"><MudSelect T="DayOfWeek" @bind-Value="_edit.DayOfWeek" Label="Wochentag" Variant="Variant.Outlined">@foreach (var day in Days){<MudSelectItem Value="@day.Value">@day.Label</MudSelectItem>}</MudSelect></MudItem>
+        <MudItem xs="6" md="2"><MudTimePicker @bind-Time="_start" Label="Von" /></MudItem>
+        <MudItem xs="6" md="2"><MudTimePicker @bind-Time="_end" Label="Bis" /></MudItem>
+        <MudItem xs="12" md="2"><MudNumericField T="int" @bind-Value="_edit.RequiredEmployees" Label="Mitarbeiter" Variant="Variant.Outlined" Min="1" /></MudItem>
+        <MudItem xs="12" md="4"><MudSelect T="int?" @bind-Value="_edit.LocationId" Label="Standort" Variant="Variant.Outlined" Clearable="true">@foreach (var x in _locations){<MudSelectItem T="int?" Value="@((int?)x.Id)">@x.Name</MudSelectItem>}</MudSelect></MudItem>
+        <MudItem xs="12" md="4"><MudSelect T="int?" @bind-Value="_edit.DepartmentId" Label="Abteilung" Variant="Variant.Outlined" Clearable="true">@foreach (var x in _departments){<MudSelectItem T="int?" Value="@((int?)x.Id)">@x.Name</MudSelectItem>}</MudSelect></MudItem>
+        <MudItem xs="12" md="4"><MudSelect T="int?" @bind-Value="_edit.RequiredQualificationId" Label="Benötigte Qualifikation" Variant="Variant.Outlined" Clearable="true">@foreach (var x in _qualifications){<MudSelectItem T="int?" Value="@((int?)x.Id)">@x.Name</MudSelectItem>}</MudSelect></MudItem>
+        <MudItem xs="12" md="3"><MudNumericField T="int" @bind-Value="_edit.BreakMinutes" Label="Pause (Min.)" Variant="Variant.Outlined" Min="0" /></MudItem>
+        <MudItem xs="12" md="3"><MudCheckBox T="bool" @bind-Value="_edit.IsActive" Label="Aktiv" /></MudItem>
+    </MudGrid>
+    <MudStack Row="true" Spacing="2" Class="mt-4">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Speichern</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="NewRule">Neu</MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudTable Items="_items" Hover="true" Striped="true">
+    <HeaderContent><MudTh>Regel</MudTh><MudTh>Tag</MudTh><MudTh>Zeit</MudTh><MudTh>Standort</MudTh><MudTh>Abteilung</MudTh><MudTh>Qualifikation</MudTh><MudTh>Bedarf</MudTh><MudTh>Status</MudTh><MudTh></MudTh></HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd><MudTd>@DayName(context.DayOfWeek)</MudTd><MudTd>@context.StartTime.ToString("HH:mm")–@context.EndTime.ToString("HH:mm")</MudTd>
+        <MudTd>@(context.Location?.Name ?? "Alle")</MudTd><MudTd>@(context.Department?.Name ?? "Alle")</MudTd><MudTd>@(context.RequiredQualification?.Name ?? "Keine")</MudTd>
+        <MudTd>@context.RequiredEmployees</MudTd><MudTd>@(context.IsActive ? "Aktiv" : "Inaktiv")</MudTd><MudTd><MudButton Size="Size.Small" OnClick="@(() => Edit(context))">Bearbeiten</MudButton></MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private StaffingRequirement _edit = new() { DayOfWeek = DayOfWeek.Monday, RequiredEmployees = 1, IsActive = true };
+    private TimeSpan? _start = new(8, 0, 0);
+    private TimeSpan? _end = new(16, 0, 0);
+    private List<StaffingRequirement> _items = [];
+    private List<Location> _locations = [];
+    private List<Department> _departments = [];
+    private List<Qualification> _qualifications = [];
+    private static readonly (DayOfWeek Value, string Label)[] Days = [(DayOfWeek.Monday,"Montag"),(DayOfWeek.Tuesday,"Dienstag"),(DayOfWeek.Wednesday,"Mittwoch"),(DayOfWeek.Thursday,"Donnerstag"),(DayOfWeek.Friday,"Freitag"),(DayOfWeek.Saturday,"Samstag"),(DayOfWeek.Sunday,"Sonntag")];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _items = await db.StaffingRequirements.AsNoTracking().Include(x => x.Location).Include(x => x.Department).Include(x => x.RequiredQualification)
+            .Where(x => x.CompanyId == companyId).OrderBy(x => x.DayOfWeek).ThenBy(x => x.StartTime).ToListAsync();
+        _locations = await db.Locations.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).OrderBy(x => x.Name).ToListAsync();
+        _departments = await db.Departments.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).OrderBy(x => x.Name).ToListAsync();
+        _qualifications = await db.Qualifications.AsNoTracking().Where(x => x.CompanyId == companyId && x.IsActive).OrderBy(x => x.Name).ToListAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_edit.Name) || _start is null || _end is null) return;
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        StaffingRequirement entity;
+        if (_edit.Id == 0)
+        {
+            entity = new StaffingRequirement { CompanyId = companyId };
+            db.StaffingRequirements.Add(entity);
+        }
+        else entity = await db.StaffingRequirements.FirstAsync(x => x.Id == _edit.Id && x.CompanyId == companyId);
+
+        entity.Name = _edit.Name.Trim(); entity.DayOfWeek = _edit.DayOfWeek; entity.StartTime = TimeOnly.FromTimeSpan(_start.Value); entity.EndTime = TimeOnly.FromTimeSpan(_end.Value);
+        entity.BreakMinutes = Math.Max(0, _edit.BreakMinutes); entity.RequiredEmployees = Math.Max(1, _edit.RequiredEmployees); entity.LocationId = _edit.LocationId;
+        entity.DepartmentId = _edit.DepartmentId; entity.RequiredQualificationId = _edit.RequiredQualificationId; entity.IsActive = _edit.IsActive;
+        await db.SaveChangesAsync();
+        await AuditLogService.WriteAsync("Planung", _edit.Id == 0 ? "Create" : "Update", "StaffingRequirement", entity.Id.ToString(), $"Personalbedarfsregel '{entity.Name}' gespeichert.");
+        NewRule(); await LoadAsync();
+    }
+
+    private void Edit(StaffingRequirement x)
+    {
+        _edit = new StaffingRequirement { Id=x.Id, CompanyId=x.CompanyId, Name=x.Name, DayOfWeek=x.DayOfWeek, BreakMinutes=x.BreakMinutes, RequiredEmployees=x.RequiredEmployees, LocationId=x.LocationId, DepartmentId=x.DepartmentId, RequiredQualificationId=x.RequiredQualificationId, IsActive=x.IsActive };
+        _start = x.StartTime.ToTimeSpan(); _end = x.EndTime.ToTimeSpan();
+    }
+
+    private void NewRule(){ _edit = new StaffingRequirement { DayOfWeek=DayOfWeek.Monday, RequiredEmployees=1, IsActive=true }; _start=new(8,0,0); _end=new(16,0,0); }
+    private static string DayName(DayOfWeek day) => Days.First(x => x.Value == day).Label;
+}
