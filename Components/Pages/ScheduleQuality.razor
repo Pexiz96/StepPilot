@@ -2,13 +2,14 @@
 @attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")]
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject TenantGuard TenantGuard
+@inject WorkTimeComplianceService ComplianceService
 
 <PageTitle>Planqualität | StepPilot</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-5">
     <div>
         <MudText Typo="Typo.h4">Planqualität</MudText>
-        <MudText Color="Color.Secondary">Erkenne kritische Planungsprobleme, bevor sie im Betrieb auffallen.</MudText>
+        <MudText Color="Color.Secondary">Besetzung, Konflikte und Arbeitszeit-Compliance für die nächsten 14 Tage auf einen Blick.</MudText>
     </div>
     <MudSpacer />
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Neu prüfen</MudButton>
@@ -21,19 +22,51 @@
 else
 {
     <MudGrid Class="mb-5">
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Unterbesetzte Schichten</MudText><MudText Typo="Typo.h4">@_understaffed.Count</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Abwesenheitskonflikte</MudText><MudText Typo="Typo.h4">@_absenceConflicts.Count</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Doppelbelegungen</MudText><MudText Typo="Typo.h4">@_overlaps.Count</MudText></MudPaper></MudItem>
-        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Qualitätsstatus</MudText><MudText Typo="Typo.h5">@(IssueCount == 0 ? "Sehr gut" : IssueCount < 3 ? "Prüfen" : "Kritisch")</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Unterbesetzt</MudText><MudText Typo="Typo.h4">@_understaffed.Count</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Planungskonflikte</MudText><MudText Typo="Typo.h4">@PlanningConflictCount</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Compliance kritisch</MudText><MudText Typo="Typo.h4" Color="@(ComplianceErrorCount > 0 ? Color.Error : Color.Success)">@ComplianceErrorCount</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Qualitätsstatus</MudText><MudText Typo="Typo.h5" Color="@StatusColor">@StatusText</MudText></MudPaper></MudItem>
     </MudGrid>
 
-    @if (IssueCount == 0)
+    @if (IssueCount == 0 && _complianceFindings.Count == 0)
     {
-        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">Für die nächsten 14 Tage wurden keine kritischen Planungsprobleme erkannt.</MudAlert>
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">Für die nächsten 14 Tage wurden keine Planungs- oder Compliance-Probleme erkannt.</MudAlert>
     }
     else
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">@IssueCount Problem(e) sollten geprüft werden.</MudAlert>
+        @if (ComplianceErrorCount > 0)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4">
+                @ComplianceErrorCount arbeitszeitrechtlich kritische Prüfung(en) wurden erkannt. Diese sollten vor Veröffentlichung des Plans geklärt werden.
+            </MudAlert>
+        }
+        else if (IssueCount > 0 || ComplianceWarningCount > 0)
+        {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">Der Plan enthält Punkte, die vor Veröffentlichung geprüft werden sollten.</MudAlert>
+        }
+
+        @if (_complianceFindings.Count > 0)
+        {
+            <MudPaper Class="pa-4 mb-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+                    <div>
+                        <MudText Typo="Typo.h6">Arbeitszeit & Compliance</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Priorisiert nach Schweregrad. Die Hinweise unterstützen die Planung und ersetzen keine rechtliche Einzelfallprüfung.</MudText>
+                    </div>
+                    <MudSpacer />
+                    <MudButton Href="/compliance-settings" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Rule">Regelprofil</MudButton>
+                </MudStack>
+
+                @foreach (var item in _complianceFindings.OrderBy(x => SeverityRank(x.Severity)).ThenBy(x => x.Date).ThenBy(x => x.EmployeeName))
+                {
+                    <MudAlert Severity="@ToMudSeverity(item.Severity)" Variant="Variant.Outlined" Class="mb-2">
+                        <MudText Typo="Typo.subtitle2">@item.EmployeeName · @item.Date.ToString("dd.MM.yyyy") · @item.Start.ToString("HH:mm")–@item.End.ToString("HH:mm")</MudText>
+                        <MudText Typo="Typo.body2">@item.Message</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@item.LegalReference · Code: @item.Code</MudText>
+                    </MudAlert>
+                }
+            </MudPaper>
+        }
 
         @if (_understaffed.Count > 0)
         {
@@ -76,7 +109,14 @@ else
     private List<UnderstaffedRow> _understaffed = [];
     private List<string> _absenceConflicts = [];
     private List<string> _overlaps = [];
-    private int IssueCount => _understaffed.Count + _absenceConflicts.Count + _overlaps.Count;
+    private List<ComplianceRow> _complianceFindings = [];
+
+    private int PlanningConflictCount => _absenceConflicts.Count + _overlaps.Count;
+    private int ComplianceErrorCount => _complianceFindings.Count(x => x.Severity == ComplianceSeverity.Error);
+    private int ComplianceWarningCount => _complianceFindings.Count(x => x.Severity == ComplianceSeverity.Warning);
+    private int IssueCount => _understaffed.Count + PlanningConflictCount + ComplianceErrorCount;
+    private string StatusText => ComplianceErrorCount > 0 || PlanningConflictCount > 0 ? "Kritisch" : IssueCount > 0 || ComplianceWarningCount > 0 ? "Prüfen" : "Sehr gut";
+    private Color StatusColor => StatusText == "Kritisch" ? Color.Error : StatusText == "Prüfen" ? Color.Warning : Color.Success;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -113,7 +153,7 @@ else
                 {
                     if (absences.Any(a => a.EmployeeId == assignment.EmployeeId && a.StartDate <= shift.Date && a.EndDate >= shift.Date))
                     {
-                        var name = assignment.Employee is null ? $"Mitarbeiter #{assignment.EmployeeId}" : $"{assignment.Employee.FirstName} {assignment.Employee.LastName}";
+                        var name = EmployeeName(assignment.Employee, assignment.EmployeeId);
                         _absenceConflicts.Add($"{name} ist am {shift.Date:dd.MM.yyyy} eingeplant, obwohl eine genehmigte Abwesenheit vorliegt.");
                     }
                 }
@@ -133,16 +173,59 @@ else
                         if (a.Date != b.Date) break;
                         if (Overlaps(a.StartTime, a.EndTime, b.StartTime, b.EndTime))
                         {
-                            var employee = ordered[i].Assignment.Employee;
-                            var name = employee is null ? $"Mitarbeiter #{group.Key}" : $"{employee.FirstName} {employee.LastName}";
+                            var name = EmployeeName(ordered[i].Assignment.Employee, group.Key);
                             _overlaps.Add($"{name} hat am {a.Date:dd.MM.yyyy} überschneidende Schichten ({a.StartTime:HH:mm}–{a.EndTime:HH:mm} und {b.StartTime:HH:mm}–{b.EndTime:HH:mm}).");
                         }
                     }
                 }
             }
+
+            _complianceFindings = [];
+            foreach (var shift in shifts)
+            {
+                foreach (var assignment in shift.Assignments)
+                {
+                    var findings = await ComplianceService.EvaluateAssignmentAsync(companyId, assignment.EmployeeId, shift);
+                    var name = EmployeeName(assignment.Employee, assignment.EmployeeId);
+                    foreach (var finding in findings)
+                    {
+                        _complianceFindings.Add(new ComplianceRow(
+                            shift.Date,
+                            shift.StartTime,
+                            shift.EndTime,
+                            name,
+                            finding.Code,
+                            finding.Severity,
+                            finding.Message,
+                            finding.LegalReference));
+                    }
+                }
+            }
+
+            _complianceFindings = _complianceFindings
+                .GroupBy(x => new { x.Date, x.EmployeeName, x.Code })
+                .Select(x => x.First())
+                .ToList();
         }
         finally { _loading = false; }
     }
+
+    private static string EmployeeName(Employee? employee, int id) =>
+        employee is null ? $"Mitarbeiter #{id}" : $"{employee.FirstName} {employee.LastName}";
+
+    private static Severity ToMudSeverity(ComplianceSeverity severity) => severity switch
+    {
+        ComplianceSeverity.Error => Severity.Error,
+        ComplianceSeverity.Warning => Severity.Warning,
+        _ => Severity.Info
+    };
+
+    private static int SeverityRank(ComplianceSeverity severity) => severity switch
+    {
+        ComplianceSeverity.Error => 0,
+        ComplianceSeverity.Warning => 1,
+        _ => 2
+    };
 
     private static bool Overlaps(TimeOnly aStart, TimeOnly aEnd, TimeOnly bStart, TimeOnly bEnd)
     {
@@ -152,4 +235,5 @@ else
     }
 
     private sealed record UnderstaffedRow(DateOnly Date, TimeOnly Start, TimeOnly End, int Required, int Assigned);
+    private sealed record ComplianceRow(DateOnly Date, TimeOnly Start, TimeOnly End, string EmployeeName, string Code, ComplianceSeverity Severity, string Message, string LegalReference);
 }
