@@ -7,7 +7,7 @@
 <PageTitle>Unternehmensprofil | StepPilot</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-2">Unternehmensprofil</MudText>
-<MudText Color="Color.Secondary" Class="mb-5">Zentrale Unternehmensdaten und Onboarding-Status.</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Zentrale Unternehmensdaten, Aufbewahrungsregeln und Onboarding-Status.</MudText>
 
 @if (_company is not null)
 {
@@ -19,7 +19,17 @@
                 <MudTextField @bind-Value="_company.Slug" Label="Mandantenkennung" Variant="Variant.Outlined" Disabled="true" />
                 <MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Speichern</MudButton>
             </MudPaper>
+
+            <MudPaper Class="pa-5 mt-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Datenschutz & Aufbewahrung</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">0 Monate deaktiviert die automatische Aufbewahrungsbereinigung. Konkrete Fristen müssen anhand der Rechtsgrundlage, Aufbewahrungspflichten und betrieblichen Vereinbarungen festgelegt werden.</MudText>
+                <MudNumericField T="int" @bind-Value="_company.TimeEntryRetentionMonths" Label="Zeiterfassung aufbewahren (Monate)" Min="0" Max="240" Variant="Variant.Outlined" Class="mb-3" />
+                <MudNumericField T="int" @bind-Value="_company.AuditLogRetentionMonths" Label="Audit-Log aufbewahren (Monate)" Min="0" Max="240" Variant="Variant.Outlined" />
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4">StepPilot setzt keine universelle gesetzliche Löschfrist voraus. Vor Aktivierung einer Frist müssen gesetzliche und vertragliche Aufbewahrungspflichten geprüft werden.</MudAlert>
+                <MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveRetentionAsync">Aufbewahrung speichern</MudButton>
+            </MudPaper>
         </MudItem>
+
         <MudItem xs="12" lg="6">
             <MudPaper Class="pa-5">
                 <MudText Typo="Typo.h6" Class="mb-4">Onboarding</MudText>
@@ -74,6 +84,19 @@
         entity.Name = _company.Name.Trim();
         await db.SaveChangesAsync();
         await AuditLogService.WriteAsync("Unternehmen", "Update", "Company", companyId.ToString(), "Unternehmensprofil aktualisiert.");
+        await LoadAsync();
+    }
+
+    private async Task SaveRetentionAsync()
+    {
+        if (_company is null) return;
+        var companyId = await TenantGuard.RequireCompanyIdAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Companies.FirstAsync(x => x.Id == companyId);
+        entity.TimeEntryRetentionMonths = Math.Clamp(_company.TimeEntryRetentionMonths, 0, 240);
+        entity.AuditLogRetentionMonths = Math.Clamp(_company.AuditLogRetentionMonths, 0, 240);
+        await db.SaveChangesAsync();
+        await AuditLogService.WriteAsync("DataGovernance", "RetentionPolicy", "Company", companyId.ToString(), $"Aufbewahrungsregeln aktualisiert: Zeitbuchungen={entity.TimeEntryRetentionMonths} Monate, Audit={entity.AuditLogRetentionMonths} Monate.");
         await LoadAsync();
     }
 }
