@@ -1,0 +1,62 @@
+@page "/my-time-tracking"
+@attribute [Authorize(Roles = AppRoles.Employee)]
+@using Microsoft.AspNetCore.Authorization
+@using StepPilot.Data
+@using StepPilot.Models
+@using StepPilot.Services
+@inject TimeTrackingService TimeTrackingService
+@inject CurrentUserService CurrentUserService
+
+<PageTitle>Meine Zeiterfassung</PageTitle>
+<MudText Typo="Typo.h4" GutterBottom="true">Meine Zeiterfassung</MudText>
+<MudText Color="Color.Secondary" Class="mb-4">Arbeitszeit starten, Pausen dokumentieren und den Arbeitstag beenden.</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_employeeId is null)
+{
+    <MudAlert Severity="Severity.Warning">Dein Benutzerkonto ist keinem Mitarbeiter zugeordnet.</MudAlert>
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-5">
+                <MudText Typo="Typo.h6">Heute</MudText>
+                @if (_active is null)
+                {
+                    <MudText Class="my-4">Aktuell läuft keine Zeiterfassung.</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="ClockIn">Arbeitszeit starten</MudButton>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Success" Class="my-4">Gestartet: @_active.StartedAtLocal.ToString("HH:mm") Uhr</MudAlert>
+                    <MudNumericField T="int" Label="Pause (Minuten)" @bind-Value="_breakMinutes" Min="0" Class="mb-3" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="ClockOut">Arbeitszeit beenden</MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-5">
+                <MudText Typo="Typo.h6" GutterBottom="true">Letzte Buchungen</MudText>
+                <MudTable Items="_entries" Dense="true" Hover="true">
+                    <HeaderContent><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Ist</MudTh><MudTh>Status</MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.StartedAtLocal.ToString("dd.MM.yyyy")</MudTd><MudTd>@context.StartedAtLocal.ToString("HH:mm")</MudTd><MudTd>@(context.EndedAtLocal?.ToString("HH:mm") ?? "–")</MudTd><MudTd>@context.BreakMinutes min</MudTd><MudTd>@FormatHours(context.WorkedMinutes)</MudTd><MudTd>@context.Status</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true; private int? _employeeId; private TimeEntry? _active; private List<TimeEntry> _entries = []; private int _breakMinutes;
+    protected override async Task OnInitializedAsync(){var current=await CurrentUserService.GetAsync();_employeeId=current.EmployeeId;if(_employeeId is not null)await Reload();_loading=false;}
+    private async Task Reload(){if(_employeeId is null)return;_active=await TimeTrackingService.GetActiveAsync(_employeeId.Value);_entries=await TimeTrackingService.GetForEmployeeAsync(_employeeId.Value,DateOnly.FromDateTime(DateTime.Today.AddDays(-30)),DateOnly.FromDateTime(DateTime.Today));_breakMinutes=_active?.BreakMinutes??0;}
+    private async Task ClockIn(){if(_employeeId is null)return;await TimeTrackingService.ClockInAsync(_employeeId.Value);await Reload();}
+    private async Task ClockOut(){if(_active is null)return;await TimeTrackingService.ClockOutAsync(_active.Id,_breakMinutes);await Reload();}
+    private static string FormatHours(int minutes)=>$"{minutes/60}:{minutes%60:00} h";
+}
