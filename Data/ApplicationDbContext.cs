@@ -30,23 +30,29 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<StaffingRequirement> StaffingRequirements => Set<StaffingRequirement>();
     public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
+    public DbSet<TimeEntryRevision> TimeEntryRevisions => Set<TimeEntryRevision>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
         builder.Entity<Company>().HasIndex(x => x.Slug).IsUnique();
         builder.Entity<ApplicationUser>().HasOne(x => x.Company).WithMany(x => x.Users).HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<EmployeeQualification>().HasKey(x => new { x.EmployeeId, x.QualificationId });
         builder.Entity<Employee>().HasIndex(x => new { x.CompanyId, x.EmployeeNumber }).IsUnique();
         builder.Entity<ShiftAssignment>().HasIndex(x => new { x.CompanyId, x.ShiftId, x.EmployeeId }).IsUnique();
         builder.Entity<Employee>().HasOne(x => x.ApplicationUser).WithOne().HasForeignKey<Employee>(x => x.ApplicationUserId).OnDelete(DeleteBehavior.SetNull);
+
         builder.Entity<EmployeeLocation>().HasKey(x => new { x.EmployeeId, x.LocationId });
         builder.Entity<EmployeeLocation>().HasIndex(x => new { x.CompanyId, x.LocationId });
         builder.Entity<EmployeeLocation>().HasOne(x => x.Employee).WithMany(x => x.AdditionalLocations).HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<EmployeeLocation>().HasOne(x => x.Location).WithMany(x => x.AdditionalEmployees).HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<Location>().HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<Department>().HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<Shift>().HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<Employee>().Property(x => x.WeeklyHours).HasPrecision(5, 2);
         builder.Entity<ComplianceProfile>().Property(x => x.MinimumRestHours).HasPrecision(5, 2);
         builder.Entity<ComplianceProfile>().Property(x => x.StandardDailyHours).HasPrecision(5, 2);
@@ -54,24 +60,32 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<ComplianceProfile>().HasIndex(x => x.CompanyId).IsUnique();
         builder.Entity<EmployeeImportRun>().HasIndex(x => new { x.CompanyId, x.FinishedAtUtc });
         builder.Entity<AuditLogEntry>().HasIndex(x => new { x.CompanyId, x.OccurredAtUtc });
+
         builder.Entity<StaffingRequirement>().HasIndex(x => new { x.CompanyId, x.DayOfWeek, x.LocationId, x.DepartmentId });
         builder.Entity<StaffingRequirement>().HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<StaffingRequirement>().HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<StaffingRequirement>().HasOne(x => x.RequiredQualification).WithMany().HasForeignKey(x => x.RequiredQualificationId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<EmployeeShiftPreference>().HasKey(x => new { x.EmployeeId, x.ShiftTemplateId });
         builder.Entity<EmployeeShiftPreference>().HasOne(x => x.Employee).WithMany(x => x.ShiftPreferences).HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<EmployeeShiftPreference>().HasOne(x => x.ShiftTemplate).WithMany().HasForeignKey(x => x.ShiftTemplateId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<OpenShiftRequest>().HasIndex(x => new { x.CompanyId, x.ShiftId, x.EmployeeId }).IsUnique();
         builder.Entity<OpenShiftRequest>().HasOne(x => x.Shift).WithMany().HasForeignKey(x => x.ShiftId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<OpenShiftRequest>().HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<ShiftSwapRequest>().HasIndex(x => new { x.CompanyId, x.ShiftAssignmentId }).IsUnique();
         builder.Entity<ShiftSwapRequest>().HasOne(x => x.ShiftAssignment).WithMany().HasForeignKey(x => x.ShiftAssignmentId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<ShiftSwapRequest>().HasOne(x => x.FromEmployee).WithMany().HasForeignKey(x => x.FromEmployeeId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<ShiftSwapRequest>().HasOne(x => x.ToEmployee).WithMany().HasForeignKey(x => x.ToEmployeeId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Entity<TimeEntry>().HasIndex(x => new { x.CompanyId, x.EmployeeId, x.ClockInUtc });
         builder.Entity<TimeEntry>().HasOne(x => x.Employee).WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<TimeEntry>().HasOne(x => x.Shift).WithMany().HasForeignKey(x => x.ShiftId).OnDelete(DeleteBehavior.SetNull);
         builder.Entity<TimeEntry>().HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<TimeEntry>().HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TimeEntryRevision>().HasIndex(x => new { x.CompanyId, x.TimeEntryId, x.ChangedAtUtc });
+        builder.Entity<TimeEntryRevision>().HasOne(x => x.TimeEntry).WithMany(x => x.Revisions).HasForeignKey(x => x.TimeEntryId).OnDelete(DeleteBehavior.Cascade);
     }
 }
