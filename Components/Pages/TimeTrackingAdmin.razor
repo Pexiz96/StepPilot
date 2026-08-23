@@ -7,25 +7,93 @@
 @inject CurrentUserService CurrentUserService
 
 <PageTitle>Zeiterfassung</PageTitle>
-<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4"><div><MudText Typo="Typo.h4">Zeiterfassung</MudText><MudText Color="Color.Secondary">Ist-Zeiten prüfen, korrigieren und freigeben.</MudText></div><MudButton StartIcon="@Icons.Material.Filled.Refresh" OnClick="Load">Aktualisieren</MudButton></MudStack>
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <div><MudText Typo="Typo.h4">Zeiterfassung</MudText><MudText Color="Color.Secondary">Ist-Zeiten prüfen, Soll-/Ist-Abweichungen erkennen und Zeiten freigeben.</MudText></div>
+    <MudButton StartIcon="@Icons.Material.Filled.Refresh" OnClick="Load">Aktualisieren</MudButton>
+</MudStack>
 
-@if (_loading){<MudProgressLinear Indeterminate="true" />}
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
 else
 {
-<MudPaper Class="pa-4">
-<MudTable Items="_entries" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
-<HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Ist</MudTh><MudTh>Status</MudTh><MudTh></MudTh></HeaderContent>
-<RowTemplate>
-<MudTd>@context.Employee?.FirstName @context.Employee?.LastName</MudTd><MudTd>@context.StartedAtLocal.ToString("dd.MM.yyyy")</MudTd><MudTd>@context.StartedAtLocal.ToString("HH:mm")</MudTd><MudTd>@(context.EndedAtLocal?.ToString("HH:mm")??"läuft")</MudTd><MudTd>@context.BreakMinutes min</MudTd><MudTd>@FormatHours(context.WorkedMinutes)</MudTd><MudTd><MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@context.Status</MudChip></MudTd><MudTd>@if(context.EndedAtLocal is not null && context.Status != TimeEntryStatus.Approved){<MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>Approve(context))">Freigeben</MudButton>}</MudTd>
-</RowTemplate></MudTable>
-</MudPaper>
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Erfasste Zeit</MudText><MudText Typo="Typo.h5">@FormatHours(_workedMinutes)</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Sollzeit</MudText><MudText Typo="Typo.h5">@FormatHours(_plannedMinutes)</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Differenz</MudText><MudText Typo="Typo.h5" Color="@((_workedMinutes - _plannedMinutes) >= 0 ? Color.Success : Color.Warning)">@FormatSignedHours(_workedMinutes - _plannedMinutes)</MudText></MudPaper></MudItem>
+        <MudItem xs="12" sm="3"><MudPaper Class="pa-4"><MudText Color="Color.Secondary">Offene Freigaben</MudText><MudText Typo="Typo.h5" Color="@(_pendingCount == 0 ? Color.Success : Color.Warning)">@_pendingCount</MudText></MudPaper></MudItem>
+    </MudGrid>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-4">@_error</MudAlert>
+    }
+
+    <MudPaper Class="pa-4">
+        <MudTable Items="_entries" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="25">
+            <HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Soll</MudTh><MudTh>Ist</MudTh><MudTh>Differenz</MudTh><MudTh>Status</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Employee?.FirstName @context.Employee?.LastName</MudTd>
+                <MudTd>@context.StartedAtLocal.ToString("dd.MM.yyyy")</MudTd>
+                <MudTd>@context.StartedAtLocal.ToString("HH:mm")</MudTd>
+                <MudTd>@(context.EndedAtLocal?.ToString("HH:mm") ?? "läuft")</MudTd>
+                <MudTd>@context.BreakMinutes min</MudTd>
+                <MudTd>@(context.Shift is null ? "–" : FormatHours(context.PlannedMinutes))</MudTd>
+                <MudTd>@FormatHours(context.WorkedMinutes)</MudTd>
+                <MudTd>@(context.Shift is null ? "–" : FormatSignedHours(context.VarianceMinutes))</MudTd>
+                <MudTd><MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@StatusText(context.Status)</MudChip></MudTd>
+                <MudTd>@if(context.EndedAtLocal is not null && context.Status != TimeEntryStatus.Approved){<MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>Approve(context))">Freigeben</MudButton>}</MudTd>
+            </RowTemplate>
+            <PagerContent><MudTablePager PageSizeOptions="new int[] { 25, 50, 100 }" /></PagerContent>
+        </MudTable>
+    </MudPaper>
 }
 
-@code{
-private bool _loading=true;private List<TimeEntry> _entries=[];
-protected override async Task OnInitializedAsync()=>await Load();
-private async Task Load(){_loading=true;var u=await CurrentUserService.GetAsync();if(u.CompanyId is not null)_entries=await TimeTrackingService.GetCompanyEntriesAsync(u.CompanyId.Value,DateOnly.FromDateTime(DateTime.Today.AddDays(-31)),DateOnly.FromDateTime(DateTime.Today));_loading=false;}
-private async Task Approve(TimeEntry e){var u=await CurrentUserService.GetAsync();await TimeTrackingService.ApproveAsync(e.Id,u.UserId);await Load();}
-private static string FormatHours(int m)=>$"{m/60}:{m%60:00} h";
-private static Color StatusColor(TimeEntryStatus s)=>s switch{TimeEntryStatus.Approved=>Color.Success,TimeEntryStatus.Running=>Color.Info,TimeEntryStatus.CorrectionRequired=>Color.Warning,_=>Color.Default};
+@code {
+    private bool _loading = true;
+    private List<TimeEntry> _entries = [];
+    private int _workedMinutes;
+    private int _plannedMinutes;
+    private int _pendingCount;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var companyId = await CurrentUserService.GetCompanyIdAsync();
+            if (companyId is not null)
+            {
+                _entries = await TimeTrackingService.GetCompanyEntriesAsync(companyId.Value, DateOnly.FromDateTime(DateTime.Today.AddDays(-31)), DateOnly.FromDateTime(DateTime.Today));
+                var completed = _entries.Where(x => x.ClockOutUtc is not null).ToList();
+                _workedMinutes = completed.Sum(x => x.WorkedMinutes);
+                _plannedMinutes = completed.Sum(x => x.PlannedMinutes);
+                _pendingCount = _entries.Count(x => x.Status == TimeEntryStatus.Submitted);
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task Approve(TimeEntry entry)
+    {
+        try
+        {
+            _error = null;
+            var user = await CurrentUserService.GetUserAsync();
+            await TimeTrackingService.ApproveAsync(entry.Id, user?.Id);
+            await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string FormatHours(int minutes) => $"{Math.Abs(minutes) / 60}:{Math.Abs(minutes) % 60:00} h";
+    private static string FormatSignedHours(int minutes) => $"{(minutes >= 0 ? "+" : "-")}{Math.Abs(minutes) / 60}:{Math.Abs(minutes) % 60:00} h";
+    private static string StatusText(TimeEntryStatus status) => status switch { TimeEntryStatus.Running => "Läuft", TimeEntryStatus.Submitted => "Eingereicht", TimeEntryStatus.Approved => "Freigegeben", TimeEntryStatus.Rejected => "Abgelehnt", _ => status.ToString() };
+    private static Color StatusColor(TimeEntryStatus status) => status switch { TimeEntryStatus.Approved => Color.Success, TimeEntryStatus.Running => Color.Info, TimeEntryStatus.Submitted => Color.Warning, TimeEntryStatus.Rejected => Color.Error, _ => Color.Default };
 }
