@@ -1,0 +1,163 @@
+@page "/employee-import"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
+@using Microsoft.AspNetCore.Components.Forms
+@inject EmployeeImportFileService ImportFileService
+
+<PageTitle>Mitarbeiter importieren | StepPilot</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-5">
+    <div>
+        <MudText Typo="Typo.h4">Mitarbeiter importieren</MudText>
+        <MudText Color="Color.Secondary">CSV, TXT oder Excel hochladen, Spalten zuordnen und vor dem Import prüfen.</MudText>
+    </div>
+</MudStack>
+
+<MudPaper Class="pa-5 mb-5">
+    <MudStack Spacing="2">
+        <MudText Typo="Typo.h6">1. Datei auswählen</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Unterstützt werden .csv, .txt und .xlsx bis 20 MB. Die erste Zeile wird als Spaltenüberschrift verwendet.
+        </MudText>
+        <InputFile OnChange="ReadFileAsync" accept=".csv,.txt,.xlsx" />
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-2" />
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+        }
+    </MudStack>
+</MudPaper>
+
+@if (_table is not null)
+{
+    <MudPaper Class="pa-5 mb-5">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+            <div>
+                <MudText Typo="Typo.h6">2. Spalten zuordnen</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_table.FileName · @_table.Rows.Count Datenzeilen · @_table.Headers.Count Spalten</MudText>
+            </div>
+            <MudSpacer />
+            <MudChip T="string" Color="@(_mappingReady ? Color.Success : Color.Warning)" Variant="Variant.Outlined">
+                @(_mappingReady ? "Pflichtfelder erkannt" : "Zuordnung prüfen")
+            </MudChip>
+        </MudStack>
+
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+            StepPilot versucht die Spalten automatisch zu erkennen. Vorname, Nachname und Personalnummer sind für den späteren Import Pflichtfelder. Andere Felder können leer bleiben.
+        </MudAlert>
+
+        <MudGrid>
+            @foreach (var target in _targets)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudSelect T="string" Label="@target.Label" Value="@Mapping(target.Key)" ValueChanged="@(value => SetMapping(target.Key, value))" Variant="Variant.Outlined" Clearable="true">
+                        @foreach (var header in _table.Headers)
+                        {
+                            <MudSelectItem T="string" Value="@header">@header</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-5">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+            <div>
+                <MudText Typo="Typo.h6">3. Vorschau</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Die ersten @Math.Min(10, _table.Rows.Count) Zeilen aus der Datei.</MudText>
+            </div>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_mappingReady)" StartIcon="@Icons.Material.Filled.ArrowForward">
+                Validierung vorbereiten
+            </MudButton>
+        </MudStack>
+
+        <div style="overflow-x:auto">
+            <table class="sp-import-table">
+                <thead>
+                    <tr>
+                        @foreach (var header in _table.Headers)
+                        {
+                            <th>@header</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _table.Rows.Take(10))
+                    {
+                        <tr>
+                            @for (var i = 0; i < _table.Headers.Count; i++)
+                            {
+                                <td>@(i < row.Count ? row[i] : string.Empty)</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </MudPaper>
+}
+
+<style>
+.sp-import-table{width:100%;border-collapse:separate;border-spacing:0;font-size:.875rem}.sp-import-table th,.sp-import-table td{padding:10px 12px;border-bottom:1px solid var(--mud-palette-divider);white-space:nowrap;text-align:left}.sp-import-table th{font-weight:700;color:var(--mud-palette-text-secondary);background:rgba(148,163,184,.06)}
+</style>
+
+@code {
+    private ImportTable? _table;
+    private bool _loading;
+    private string? _error;
+    private Dictionary<string, string?> _mapping = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly (string Key, string Label)[] _targets =
+    [
+        ("EmployeeNumber", "Personalnummer *"),
+        ("FirstName", "Vorname *"),
+        ("LastName", "Nachname *"),
+        ("Email", "E-Mail"),
+        ("PhoneNumber", "Telefon"),
+        ("WeeklyHours", "Wochenstunden"),
+        ("Position", "Position"),
+        ("Location", "Standort"),
+        ("Department", "Abteilung"),
+        ("Qualifications", "Qualifikationen")
+    ];
+
+    private bool _mappingReady =>
+        !string.IsNullOrWhiteSpace(Mapping("EmployeeNumber")) &&
+        !string.IsNullOrWhiteSpace(Mapping("FirstName")) &&
+        !string.IsNullOrWhiteSpace(Mapping("LastName"));
+
+    private async Task ReadFileAsync(InputFileChangeEventArgs args)
+    {
+        _loading = true;
+        _error = null;
+        _table = null;
+        _mapping.Clear();
+
+        try
+        {
+            _table = await ImportFileService.ReadAsync(args.File);
+            _mapping = ImportFileService.SuggestMappings(_table.Headers);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string? Mapping(string key) => _mapping.TryGetValue(key, out var value) ? value : null;
+
+    private void SetMapping(string key, string? value)
+    {
+        _mapping[key] = value;
+    }
+}
