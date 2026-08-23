@@ -12,16 +12,11 @@
 <MudLayout>
     <MudAppBar Elevation="0" Class="sp-appbar">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" OnClick="ToggleDrawer" Title="Navigation öffnen oder schließen" />
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-            <img src="images/steppilot-logo.png" alt="StepPilot" class="sp-brand-logo" />
-            <MudText Typo="Typo.h6" Class="sp-brand">StepPilot</MudText>
-        </MudStack>
-        <MudSpacer />
-        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" OnClick="ToggleDarkMode" Title="Darstellung wechseln" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1"><img src="images/steppilot-logo.png" alt="StepPilot" class="sp-brand-logo" /><MudText Typo="Typo.h6" Class="sp-brand">StepPilot</MudText></MudStack>
+        <MudSpacer /><MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" OnClick="ToggleDarkMode" Title="Darstellung wechseln" />
         <AuthorizeView><MudBadge Content="@(_unreadCount > 99 ? "99+" : _unreadCount.ToString())" Color="Color.Error" Overlap="true" Visible="@(_unreadCount > 0)"><MudIconButton Icon="@Icons.Material.Filled.Notifications" Href="/notifications" Title="Benachrichtigungen" /></MudBadge></AuthorizeView>
         <MudIconButton Icon="@Icons.Material.Filled.AccountCircle" Href="/Account/Manage" Title="Mein Konto" />
     </MudAppBar>
-
     <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Class="sp-drawer">
         <MudDrawerHeader><MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1"><img src="images/steppilot-logo.png" alt="StepPilot" class="sp-brand-logo sp-brand-logo-drawer" /><MudText Typo="Typo.h5" Class="sp-brand">StepPilot</MudText></MudStack></MudDrawerHeader>
         <MudNavMenu>
@@ -30,24 +25,19 @@
             <AuthorizeView Roles="@($"{AppRoles.Owner},{AppRoles.Admin},{AppRoles.Planner}")">
                 <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-4">Steuerung</MudText><MudNavLink Href="/action-center" Icon="@Icons.Material.Filled.TaskAlt">Handlungszentrum</MudNavLink><MudNavLink Href="/schedule-quality" Icon="@Icons.Material.Filled.FactCheck">Planqualität</MudNavLink>
                 <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-4">Organisation</MudText><MudNavLink Href="/employees" Icon="@Icons.Material.Filled.People">Mitarbeiter</MudNavLink><MudNavLink Href="/locations" Icon="@Icons.Material.Filled.Place">Standorte</MudNavLink><MudNavLink Href="/departments" Icon="@Icons.Material.Filled.AccountTree">Abteilungen</MudNavLink><MudNavLink Href="/qualifications" Icon="@Icons.Material.Filled.WorkspacePremium">Qualifikationen</MudNavLink>
-                <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-4">Planung</MudText><MudNavLink Href="/shift-templates" Icon="@Icons.Material.Filled.Schedule">Schichtvorlagen</MudNavLink><MudNavLink Href="/shift-preferences" Icon="@Icons.Material.Filled.Tune">Schichtpräferenzen</MudNavLink><MudNavLink Href="/schedule" Icon="@Icons.Material.Filled.CalendarMonth">Schichtplanung</MudNavLink><MudNavLink Href="/open-shift-requests" Icon="@Icons.Material.Filled.AddTask">Schichtanfragen</MudNavLink><MudNavLink Href="/shift-swap-requests" Icon="@Icons.Material.Filled.SwapHoriz">Tauschanfragen</MudNavLink><MudNavLink Href="/absences" Icon="@Icons.Material.Filled.EventBusy">Abwesenheiten</MudNavLink><MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Verfügbarkeiten</MudNavLink><MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Auswertungen</MudNavLink>
+                <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-4">Planung & Zeit</MudText><MudNavLink Href="/shift-templates" Icon="@Icons.Material.Filled.Schedule">Schichtvorlagen</MudNavLink><MudNavLink Href="/shift-preferences" Icon="@Icons.Material.Filled.Tune">Schichtpräferenzen</MudNavLink><MudNavLink Href="/schedule" Icon="@Icons.Material.Filled.CalendarMonth">Schichtplanung</MudNavLink><MudNavLink Href="/time-tracking" Icon="@Icons.Material.Filled.Timer">Zeiterfassung</MudNavLink><MudNavLink Href="/open-shift-requests" Icon="@Icons.Material.Filled.AddTask">Schichtanfragen</MudNavLink><MudNavLink Href="/shift-swap-requests" Icon="@Icons.Material.Filled.SwapHoriz">Tauschanfragen</MudNavLink><MudNavLink Href="/absences" Icon="@Icons.Material.Filled.EventBusy">Abwesenheiten</MudNavLink><MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Verfügbarkeiten</MudNavLink><MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Auswertungen</MudNavLink>
             </AuthorizeView>
             <AuthorizeView Roles="@($"{AppRoles.Owner},{AppRoles.Admin}")"><MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-4">Unternehmen</MudText><MudNavLink Href="/employee-import" Icon="@Icons.Material.Filled.UploadFile">Datenimport</MudNavLink><MudNavLink Href="/compliance-settings" Icon="@Icons.Material.Filled.Policy">Compliance-Regeln</MudNavLink><MudNavLink Href="/user-accounts" Icon="@Icons.Material.Filled.ManageAccounts">Benutzerkonten</MudNavLink></AuthorizeView>
-            <AuthorizeView Roles="@AppRoles.Employee"><MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-4">Mein Arbeitsbereich</MudText><MudNavLink Href="/my-schedule" Icon="@Icons.Material.Filled.Event">Meine Schichten</MudNavLink><MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Meine Verfügbarkeit</MudNavLink><MudNavLink Href="/open-shifts" Icon="@Icons.Material.Filled.AddTask">Offene Schichten</MudNavLink><MudNavLink Href="/shift-swaps" Icon="@Icons.Material.Filled.SwapHoriz">Schichttausch</MudNavLink></AuthorizeView>
+            <AuthorizeView Roles="@AppRoles.Employee"><MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-4">Mein Arbeitsbereich</MudText><MudNavLink Href="/my-schedule" Icon="@Icons.Material.Filled.Event">Meine Schichten</MudNavLink><MudNavLink Href="/my-time-tracking" Icon="@Icons.Material.Filled.Timer">Meine Zeiterfassung</MudNavLink><MudNavLink Href="/availability" Icon="@Icons.Material.Filled.AccessTime">Meine Verfügbarkeit</MudNavLink><MudNavLink Href="/open-shifts" Icon="@Icons.Material.Filled.AddTask">Offene Schichten</MudNavLink><MudNavLink Href="/shift-swaps" Icon="@Icons.Material.Filled.SwapHoriz">Schichttausch</MudNavLink></AuthorizeView>
             <AuthorizeView><MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 mt-4">Konto</MudText><MudNavLink Href="/notifications" Icon="@Icons.Material.Filled.Notifications">Benachrichtigungen</MudNavLink></AuthorizeView>
         </MudNavMenu>
     </MudDrawer>
     <MudMainContent Class="sp-main"><MudContainer MaxWidth="MaxWidth.False" Class="sp-content">@Body</MudContainer></MudMainContent>
 </MudLayout>
-
-<style>
-.sp-brand-logo{width:34px;height:34px;object-fit:cover;border-radius:9px;display:block;box-shadow:0 5px 16px rgba(109,74,255,.22)}
-.sp-brand-logo-drawer{width:40px;height:40px;border-radius:11px}
-</style>
-
+<style>.sp-brand-logo{width:34px;height:34px;object-fit:cover;border-radius:9px;display:block;box-shadow:0 5px 16px rgba(109,74,255,.22)}.sp-brand-logo-drawer{width:40px;height:40px;border-radius:11px}</style>
 @code {
-    private bool _drawerOpen = true; private bool _isDarkMode = true; private int _unreadCount;
+    private bool _drawerOpen=true;private bool _isDarkMode=true;private int _unreadCount;
     protected override async Task OnInitializedAsync(){var auth=await AuthenticationStateProvider.GetAuthenticationStateAsync();if(auth.User.Identity?.IsAuthenticated!=true)return;var user=await UserManager.GetUserAsync(auth.User);if(user?.CompanyId is null)return;_unreadCount=await NotificationService.GetUnreadCountAsync(user.CompanyId.Value,user.Id);}
     private readonly MudTheme _theme=new(){PaletteDark=new PaletteDark{Primary="#8B5CF6",Secondary="#93A4BE",Tertiary="#4F7CFF",Success="#27C96F",Warning="#F59E0B",Error="#EF5261",Info="#4F7CFF",Background="#07111F",Surface="#101D31",DrawerBackground="#081321",AppbarBackground="#07111F",TextPrimary="#F4F7FB",TextSecondary="#9FB0C9",ActionDefault="#9FB0C9",Divider="rgba(148,163,184,.16)"},PaletteLight=new PaletteLight{Primary="#6D4AFF",Secondary="#64748B",Tertiary="#315EFB",Success="#159957",Warning="#D97706",Error="#DC3545",Info="#315EFB",Background="#F4F7FB",Surface="#FFFFFF",DrawerBackground="#FFFFFF",AppbarBackground="#FFFFFF",TextPrimary="#172033",TextSecondary="#64748B",ActionDefault="#64748B",Divider="rgba(15,23,42,.10)"},LayoutProperties=new LayoutProperties{DefaultBorderRadius="10px"}};
-    private void ToggleDrawer()=>_drawerOpen=!_drawerOpen; private void ToggleDarkMode()=>_isDarkMode=!_isDarkMode;
+    private void ToggleDrawer()=>_drawerOpen=!_drawerOpen;private void ToggleDarkMode()=>_isDarkMode=!_isDarkMode;
 }
