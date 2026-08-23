@@ -158,7 +158,7 @@ public sealed class DataGovernanceService(
                 AdditionalLocations = employee.AdditionalLocations.Select(x => x.Location?.Name).Where(x => x is not null).ToArray(),
                 Qualifications = employee.Qualifications.Select(x => x.Qualification?.Name).Where(x => x is not null).ToArray()
             },
-            Absences = absences.Select(x => new { x.Id, x.StartDate, x.EndDate, Type = x.Type.ToString(), Status = x.Status.ToString(), x.Notes }),
+            Absences = absences.Select(x => new { x.Id, x.StartDate, x.EndDate, Type = x.Type.ToString(), Status = x.Status.ToString(), x.Reason }),
             TimeEntries = timeEntries,
             ShiftAssignments = assignments
         };
