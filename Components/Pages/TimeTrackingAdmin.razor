@@ -29,10 +29,20 @@ else
     {
         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-4">@_error</MudAlert>
     }
+    @if (!string.IsNullOrWhiteSpace(_success))
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-4">@_success</MudAlert>
+    }
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Ablehnung mit Begründung</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Eine Ablehnung ist nur für eingereichte Zeitbuchungen möglich. Die Begründung wird revisions- und auditfähig gespeichert.</MudText>
+        <MudTextField @bind-Value="_rejectionReason" Label="Begründung für Ablehnung" Variant="Variant.Outlined" Lines="2" />
+    </MudPaper>
 
     <MudPaper Class="pa-4">
         <MudTable Items="_entries" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="25">
-            <HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Soll</MudTh><MudTh>Ist</MudTh><MudTh>Differenz</MudTh><MudTh>Status</MudTh><MudTh></MudTh></HeaderContent>
+            <HeaderContent><MudTh>Mitarbeiter</MudTh><MudTh>Datum</MudTh><MudTh>Beginn</MudTh><MudTh>Ende</MudTh><MudTh>Pause</MudTh><MudTh>Soll</MudTh><MudTh>Ist</MudTh><MudTh>Differenz</MudTh><MudTh>Status</MudTh><MudTh>Aktionen</MudTh></HeaderContent>
             <RowTemplate>
                 <MudTd>@context.Employee?.FirstName @context.Employee?.LastName</MudTd>
                 <MudTd>@context.StartedAtLocal.ToString("dd.MM.yyyy")</MudTd>
@@ -42,21 +52,65 @@ else
                 <MudTd>@(context.Shift is null ? "–" : FormatHours(context.PlannedMinutes))</MudTd>
                 <MudTd>@FormatHours(context.WorkedMinutes)</MudTd>
                 <MudTd>@(context.Shift is null ? "–" : FormatSignedHours(context.VarianceMinutes))</MudTd>
-                <MudTd><MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@StatusText(context.Status)</MudChip></MudTd>
-                <MudTd>@if(context.EndedAtLocal is not null && context.Status != TimeEntryStatus.Approved){<MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>Approve(context))">Freigeben</MudButton>}</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@StatusText(context.Status)</MudChip>
+                    @if (context.Status == TimeEntryStatus.Rejected && !string.IsNullOrWhiteSpace(context.RejectionReason))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error" Class="mt-1">@context.RejectionReason</MudText>
+                    }
+                </MudTd>
+                <MudTd>
+                    @if (context.ClockOutUtc is not null && context.Status == TimeEntryStatus.Submitted)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="@(() => Approve(context))">Freigeben</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => Reject(context))">Ablehnen</MudButton>
+                    }
+                    @if (context.IsManualCorrection)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => LoadRevisions(context))">Revisionen</MudButton>
+                    }
+                </MudTd>
             </RowTemplate>
             <PagerContent><MudTablePager PageSizeOptions="new int[] { 25, 50, 100 }" /></PagerContent>
         </MudTable>
     </MudPaper>
+
+    @if (_revisionEntry is not null)
+    {
+        <MudPaper Class="pa-4 mt-4">
+            <MudText Typo="Typo.h6">Korrekturhistorie · @_revisionEntry.Employee?.FirstName @_revisionEntry.Employee?.LastName</MudText>
+            @if (_revisions.Count == 0)
+            {
+                <MudText Color="Color.Secondary" Class="mt-2">Keine historischen Korrekturen vorhanden.</MudText>
+            }
+            else
+            {
+                <MudTable Items="_revisions" Dense="true" Class="mt-3">
+                    <HeaderContent><MudTh>Zeitpunkt</MudTh><MudTh>Vorher</MudTh><MudTh>Nachher</MudTh><MudTh>Pause</MudTh><MudTh>Grund</MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.ChangedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudTd>
+                        <MudTd>@context.PreviousClockInUtc.ToLocalTime().ToString("dd.MM. HH:mm") – @(context.PreviousClockOutUtc?.ToLocalTime().ToString("HH:mm") ?? "offen")</MudTd>
+                        <MudTd>@context.NewClockInUtc.ToLocalTime().ToString("dd.MM. HH:mm") – @(context.NewClockOutUtc?.ToLocalTime().ToString("HH:mm") ?? "offen")</MudTd>
+                        <MudTd>@context.PreviousBreakMinutes → @context.NewBreakMinutes min</MudTd>
+                        <MudTd>@context.Reason</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+    }
 }
 
 @code {
     private bool _loading = true;
     private List<TimeEntry> _entries = [];
+    private List<TimeEntryRevision> _revisions = [];
+    private TimeEntry? _revisionEntry;
     private int _workedMinutes;
     private int _plannedMinutes;
     private int _pendingCount;
     private string? _error;
+    private string? _success;
+    private string? _rejectionReason;
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -84,12 +138,33 @@ else
     {
         try
         {
-            _error = null;
+            _error = null; _success = null;
             var user = await CurrentUserService.GetUserAsync();
             await TimeTrackingService.ApproveAsync(entry.Id, user?.Id);
+            _success = "Zeitbuchung wurde freigegeben.";
             await Load();
         }
         catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task Reject(TimeEntry entry)
+    {
+        try
+        {
+            _error = null; _success = null;
+            var user = await CurrentUserService.GetUserAsync();
+            await TimeTrackingService.RejectAsync(entry.Id, _rejectionReason ?? string.Empty, user?.Id);
+            _success = "Zeitbuchung wurde abgelehnt und an den Mitarbeiter zurückgegeben.";
+            _rejectionReason = null;
+            await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task LoadRevisions(TimeEntry entry)
+    {
+        _revisionEntry = entry;
+        _revisions = await TimeTrackingService.GetRevisionsAsync(entry.Id);
     }
 
     private static string FormatHours(int minutes) => $"{Math.Abs(minutes) / 60}:{Math.Abs(minutes) % 60:00} h";
