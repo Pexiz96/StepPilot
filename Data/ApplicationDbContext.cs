@@ -26,6 +26,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<OpenShiftRequest> OpenShiftRequests => Set<OpenShiftRequest>();
     public DbSet<ShiftSwapRequest> ShiftSwapRequests => Set<ShiftSwapRequest>();
     public DbSet<ComplianceProfile> ComplianceProfiles => Set<ComplianceProfile>();
+    public DbSet<EmployeeImportRun> EmployeeImportRuns => Set<EmployeeImportRun>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -40,6 +41,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<EmployeeQualification>().HasKey(x => new { x.EmployeeId, x.QualificationId });
         builder.Entity<Employee>().HasIndex(x => new { x.CompanyId, x.EmployeeNumber }).IsUnique();
         builder.Entity<ShiftAssignment>().HasIndex(x => new { x.CompanyId, x.ShiftId, x.EmployeeId }).IsUnique();
+        builder.Entity<EmployeeImportRun>().HasIndex(x => new { x.CompanyId, x.StartedAtUtc });
 
         builder.Entity<Employee>()
             .HasOne(x => x.ApplicationUser).WithOne()
