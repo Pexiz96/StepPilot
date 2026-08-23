@@ -11,6 +11,9 @@ public class Shift : TenantEntity
     public int? LocationId { get; set; }
     public Location? Location { get; set; }
 
+    public int? DepartmentId { get; set; }
+    public Department? Department { get; set; }
+
     public DateOnly Date { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
