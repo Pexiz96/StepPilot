@@ -1,0 +1,37 @@
+@page "/audit-log"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
+@inject AuditLogService AuditLogService
+
+<PageTitle>Audit-Log | StepPilot</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <div>
+        <MudText Typo="Typo.h4">Audit-Log</MudText>
+        <MudText Color="Color.Secondary">Nachvollziehbare Änderungen an Organisation und Planung.</MudText>
+    </div>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Aktualisieren</MudButton>
+</MudStack>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudTextField @bind-Value="_search" Label="Filtern" Variant="Variant.Outlined" Immediate="true" />
+</MudPaper>
+
+<MudTable Items="Filtered" Hover="true" Dense="true" RowsPerPage="50">
+    <HeaderContent><MudTh>Zeitpunkt</MudTh><MudTh>Bereich</MudTh><MudTh>Aktion</MudTh><MudTh>Objekt</MudTh><MudTh>Beschreibung</MudTh></HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</MudTd>
+        <MudTd>@context.Category</MudTd><MudTd>@context.Action</MudTd><MudTd>@context.EntityType @(string.IsNullOrWhiteSpace(context.EntityId) ? "" : $"#{context.EntityId}")</MudTd><MudTd>@context.Summary</MudTd>
+    </RowTemplate>
+    <PagerContent><MudTablePager PageSizeOptions="new int[] { 25, 50, 100, 250 }" /></PagerContent>
+</MudTable>
+
+@code {
+    private List<AuditLogEntry> _items = [];
+    private string _search = string.Empty;
+    private IEnumerable<AuditLogEntry> Filtered => _items.Where(x => string.IsNullOrWhiteSpace(_search) ||
+        x.Category.Contains(_search, StringComparison.OrdinalIgnoreCase) || x.Action.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        x.EntityType.Contains(_search, StringComparison.OrdinalIgnoreCase) || x.Summary.Contains(_search, StringComparison.OrdinalIgnoreCase));
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private async Task LoadAsync() => _items = await AuditLogService.GetRecentAsync(1000);
+}
