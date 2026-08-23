@@ -1,0 +1,112 @@
+@page "/privacy-center"
+@attribute [Authorize(Roles = $"{AppRoles.Owner},{AppRoles.Admin}")]
+@using Microsoft.AspNetCore.Authorization
+@using StepPilot.Models
+@using StepPilot.Services
+@inject DataGovernanceService DataGovernanceService
+@inject EmployeeService EmployeeService
+
+<PageTitle>Datenschutz | StepPilot</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-2">Datenschutz & Datenverwaltung</MudText>
+<MudText Color="Color.Secondary" Class="mb-5">Datenauskunft, Aufbewahrungsprüfung und kontrollierte Löschung operativer Daten.</MudText>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-4">@_error</MudAlert>
+}
+@if (!string.IsNullOrWhiteSpace(_success))
+{
+    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-4">@_success</MudAlert>
+}
+
+<MudGrid>
+    <MudItem xs="12" lg="6">
+        <MudPaper Class="pa-5">
+            <MudText Typo="Typo.h6">Datenauskunft</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Erstellt einen strukturierten JSON-Export der in StepPilot gespeicherten Mitarbeiter-, Abwesenheits-, Zeit- und Schichtdaten.</MudText>
+            <MudSelect T="int?" @bind-Value="_selectedEmployeeId" Label="Mitarbeiter" Variant="Variant.Outlined" Clearable="true">
+                @foreach (var employee in _employees)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)employee.Id)">@employee.EmployeeNumber · @employee.FirstName @employee.LastName</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_selectedEmployeeId is null)" OnClick="CreateExport">Export erstellen</MudButton>
+
+            @if (!string.IsNullOrWhiteSpace(_exportJson))
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">Der Export wurde erzeugt und im Audit-Log dokumentiert. Prüfe ihn vor einer externen Weitergabe auf die konkrete Rechtsgrundlage und Identität des Anfragenden.</MudAlert>
+                <MudTextField Value="@_exportJson" Label="Exportvorschau" Lines="12" ReadOnly="true" Variant="Variant.Outlined" Class="mt-3" />
+                <a class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mt-3" href="@ExportHref" download="@ExportFileName">JSON herunterladen</a>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" lg="6">
+        <MudPaper Class="pa-5">
+            <MudText Typo="Typo.h6">Aufbewahrungsprüfung</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Die hier angezeigten Daten werden nur dann als löschbar vorgeschlagen, wenn im Unternehmensprofil eine Frist größer 0 hinterlegt ist.</MudText>
+            @if (_preview is null)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else
+            {
+                <MudGrid>
+                    <MudItem xs="12" sm="6"><MudPaper Class="pa-3"><MudText Color="Color.Secondary">Zeitbuchungen</MudText><MudText Typo="Typo.h5">@_preview.TimeEntriesEligible</MudText><MudText Typo="Typo.caption">Stichtag: @FormatCutoff(_preview.TimeEntryCutoffUtc)</MudText></MudPaper></MudItem>
+                    <MudItem xs="12" sm="6"><MudPaper Class="pa-3"><MudText Color="Color.Secondary">Audit-Einträge</MudText><MudText Typo="Typo.h5">@_preview.AuditEntriesEligible</MudText><MudText Typo="Typo.caption">Stichtag: @FormatCutoff(_preview.AuditLogCutoffUtc)</MudText></MudPaper></MudItem>
+                </MudGrid>
+
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="my-4">Lösche Daten erst nach Prüfung gesetzlicher, steuerlicher, arbeitsrechtlicher und vertraglicher Aufbewahrungspflichten. StepPilot kann diese Entscheidung nicht automatisch treffen.</MudAlert>
+                <MudTextField @bind-Value="_deleteConfirmation" Label="Zur Löschung exakt DELETE eingeben" Variant="Variant.Outlined" />
+                <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Error" Disabled="@(!CanPurge)" OnClick="Purge">Fristgemäß löschen</MudButton>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<Employee> _employees = [];
+    private int? _selectedEmployeeId;
+    private string? _exportJson;
+    private RetentionPreview? _preview;
+    private string? _deleteConfirmation;
+    private string? _error;
+    private string? _success;
+
+    private string ExportHref => string.IsNullOrWhiteSpace(_exportJson) ? "#" : $"data:application/json;charset=utf-8,{Uri.EscapeDataString(_exportJson)}";
+    private string ExportFileName => _selectedEmployeeId is null ? "steppilot-datenauskunft.json" : $"steppilot-datenauskunft-{_selectedEmployeeId}.json";
+    private bool CanPurge => _preview is not null && (_preview.TimeEntriesEligible > 0 || _preview.AuditEntriesEligible > 0) && string.Equals(_deleteConfirmation, "DELETE", StringComparison.Ordinal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _employees = await EmployeeService.GetAllAsync();
+        _preview = await DataGovernanceService.GetRetentionPreviewAsync();
+    }
+
+    private async Task CreateExport()
+    {
+        if (_selectedEmployeeId is null) return;
+        try
+        {
+            _error = null; _success = null;
+            _exportJson = await DataGovernanceService.ExportEmployeeDataAsync(_selectedEmployeeId.Value);
+            _success = "Datenauskunft wurde erstellt.";
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task Purge()
+    {
+        try
+        {
+            _error = null; _success = null;
+            var result = await DataGovernanceService.PurgeExpiredOperationalDataAsync(_deleteConfirmation ?? string.Empty);
+            _success = $"Bereinigung abgeschlossen: {result.DeletedTimeEntries} Zeitbuchungen und {result.DeletedAuditEntries} Audit-Einträge gelöscht.";
+            _deleteConfirmation = null;
+            _preview = await DataGovernanceService.GetRetentionPreviewAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string FormatCutoff(DateTime? value) => value is null ? "deaktiviert" : value.Value.ToLocalTime().ToString("dd.MM.yyyy");
+}
