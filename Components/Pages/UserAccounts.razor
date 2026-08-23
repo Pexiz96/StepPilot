@@ -3,6 +3,8 @@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject TenantGuard TenantGuard
 @inject UserManager<ApplicationUser> UserManager
+@inject AuditLogService AuditLogService
+@inject CurrentUserService CurrentUserService
 
 <PageTitle>Benutzerkonten | StepPilot</PageTitle>
 
@@ -34,7 +36,7 @@ else
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_email" Label="Login-E-Mail" Variant="Variant.Outlined" InputType="InputType.Email" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_temporaryPassword" Label="Temporäres Passwort" Variant="Variant.Outlined" InputType="InputType.Password" /></MudItem>
         </MudGrid>
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">Das Passwort wird nicht in StepPilot gespeichert. Teile das temporäre Passwort dem Mitarbeiter über einen sicheren Weg mit.</MudAlert>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">Das Passwort wird nicht in StepPilot gespeichert. Teile das temporäre Passwort dem Mitarbeiter ausschließlich über einen sicheren Kanal mit.</MudAlert>
         <MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="CreateAccount">Zugang erstellen</MudButton>
     </MudPaper>
 
@@ -135,6 +137,7 @@ else
         employee.ApplicationUserId = user.Id;
         employee.Email = _email.Trim();
         await db.SaveChangesAsync();
+        await AuditLogService.WriteAsync("Identity", "CreateEmployeeAccount", nameof(ApplicationUser), user.Id, $"Mitarbeiterkonto erstellt und mit MitarbeiterId={employee.Id} verknüpft; Rolle={AppRoles.Employee}.", (await CurrentUserService.GetUserAsync())?.Id);
 
         _severity = Severity.Success;
         _message = $"Zugang für {employee.FirstName} {employee.LastName} wurde erstellt und mit dem Mitarbeiterprofil verknüpft.";
