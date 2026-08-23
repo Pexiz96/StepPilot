@@ -4,16 +4,16 @@
 
 # StepPilot
 
-### Moderne Mitarbeiter- und Schichtplanung für Unternehmen
+### Workforce Management, Schichtplanung und Zeiterfassung für Unternehmen
 
-**Planen · Koordinieren · Informieren · Auswerten**
+**Planen · Importieren · Prüfen · Erfassen · Auswerten**
 
-![.NET](https://img.shields.io/badge/.NET-Blazor-512BD4?style=flat-square&logo=dotnet)
+![.NET](https://img.shields.io/badge/.NET-10-512BD4?style=flat-square&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-Application-512BD4?style=flat-square&logo=csharp)
 ![EF Core](https://img.shields.io/badge/Entity%20Framework-Core-512BD4?style=flat-square)
 ![SQL Server](https://img.shields.io/badge/SQL-Server-CC2927?style=flat-square&logo=microsoftsqlserver)
 ![MudBlazor](https://img.shields.io/badge/UI-MudBlazor-594AE2?style=flat-square)
-![Status](https://img.shields.io/badge/Status-Portfolio%20v1.0-success?style=flat-square)
+![CI](https://img.shields.io/badge/CI-Release%20Build-success?style=flat-square)
 
 </div>
 
@@ -21,175 +21,103 @@
 
 ## Über StepPilot
 
-**StepPilot** ist eine mandantenfähige Webanwendung für die digitale Mitarbeiter- und Schichtplanung. Sie bildet typische Abläufe aus der betrieblichen Personalplanung in einer zentralen Anwendung ab – von der Mitarbeiterverwaltung über die Dienstplanung bis zu Abwesenheiten, Schichttausch, Benachrichtigungen und Auswertungen.
+**StepPilot** ist eine mandantenfähige Webanwendung für Mitarbeiterverwaltung, Schichtplanung, Arbeitszeit-Compliance und Zeiterfassung. Die Anwendung bildet typische Abläufe von kleinen Teams bis zu größeren Unternehmensstrukturen ab und verbindet Stammdaten, Standorte, Abteilungen, Qualifikationen, Dienstplanung, Self-Service, Zeitbuchungen und Management-Auswertungen in einer Oberfläche.
 
-Das Projekt wurde als praxisnahes Portfolio-Projekt entwickelt und legt besonderen Wert auf eine klare Rollenverteilung, Mandantentrennung und realistische Workflows.
-
-> **Ziel:** Weniger organisatorischer Aufwand, bessere Übersicht und eine zentrale Anlaufstelle für Planung und Mitarbeiter.
-
-## Highlights
+## Kernfunktionen
 
 | Bereich | Funktionen |
 | --- | --- |
-| **Dienstplanung** | Wochenbasierte Planung, Schichtvorlagen, automatische Planung und Konfliktprüfung |
-| **Mitarbeiter** | Mitarbeiter, Standorte, Abteilungen, Qualifikationen und Benutzerkonten |
-| **Self-Service** | Eigene Schichten, Verfügbarkeiten, offene Schichten und Schichttausch |
-| **Abwesenheiten** | Urlaub, Krankheit und weitere Abwesenheiten mit Genehmigungsworkflow |
-| **Kommunikation** | In-App-Benachrichtigungen bei wichtigen Planungsereignissen |
-| **Management** | Handlungszentrum, Planqualitätsprüfung und Auswertungen |
-| **Reporting** | Soll-/Ist-Stunden, Auslastung, Besetzungsgrad und CSV-Export |
-| **UX** | Modernes responsives UI sowie Dark und Light Mode |
+| **Organisation** | Unternehmen, Standorte, Abteilungen, Mitarbeiter, Qualifikationen und Bulk-Aktionen |
+| **Datenimport** | CSV/TXT/XLSX, Spaltenzuordnung, Validierung, Duplikaterkennung, Vorschau, Batch-Import und Import-Historie |
+| **Dienstplanung** | Wochenplanung, Schichtvorlagen, Standort-/Abteilungsbezug, Qualifikationen, automatische Planung und Konfliktprüfung |
+| **Bedarfsplanung** | Personalbedarf nach Wochentag, Standort, Abteilung und Qualifikation |
+| **Compliance** | Zentrale Regel-Engine für Arbeitszeit, Pausen, Ruhezeiten sowie Sonn-/Feiertagsprüfungen mit konfigurierbarem Unternehmensprofil |
+| **Zeiterfassung** | Arbeitsbeginn/-ende, Pausen, Soll-/Ist-Vergleich, Zeitkonto, Korrekturen mit Begründung und Freigabeworkflow |
+| **Self-Service** | Eigene Schichten, Verfügbarkeiten, offene Schichten, Schichttausch und eigene Zeiterfassung |
+| **Management** | Handlungszentrum, Planqualität, Audit-Log, Unternehmensprofil und Auswertungen |
+| **Security** | ASP.NET Core Identity, Rollenmodell, Mandantentrennung, TenantGuard, Antiforgery, HTTPS und Sicherheitsheader |
 
-## Funktionsumfang
-
-- Mitarbeiterverwaltung
-- Standorte und Abteilungen
-- Qualifikationen
-- Schichtvorlagen und Schichtpräferenzen
-- Wochenbasierte Dienstplanung
-- Automatische Schichtplanung mit Konfliktprüfung
-- Veröffentlichung von Dienstplänen
-- Persönliche Ansicht **„Meine Schichten“**
-- Verfügbarkeiten
-- Urlaubs- und Abwesenheitsverwaltung
-- Offene Schichten und freiwillige Übernahmeanfragen
-- Schichttausch zwischen Mitarbeitern
-- Genehmigungsworkflows für Planung und Verwaltung
-- In-App-Benachrichtigungen
-- Handlungszentrum für offene Personalentscheidungen
-- Planqualitätsprüfung
-- Auswertungen zu Soll-/Ist-Stunden, Auslastung und Besetzungsgrad
-- CSV-Export
-- Dark Mode und Light Mode
-- Rollen- und mandantenbasierte Zugriffskontrolle
-
-## Rollen & Berechtigungen
+## Rollen
 
 | Rolle | Aufgabe |
 | --- | --- |
-| **SuperAdmin** | Unternehmen verwalten und privaten Administrations-/Testbereich nutzen |
-| **Owner** | Unternehmensverantwortung und umfangreiche Verwaltungsrechte |
-| **Admin** | Mitarbeiter und Benutzerkonten verwalten |
-| **Planner** | Operative Schicht- und Personalplanung |
-| **Employee** | Eigene Schichten, Verfügbarkeiten, offene Schichten und Tauschanfragen verwalten |
+| **SuperAdmin** | Unternehmen und Plattformadministration |
+| **Owner** | Unternehmensverantwortung und vollständige Unternehmensverwaltung |
+| **Admin** | Stammdaten, Benutzer, Compliance und operative Verwaltung |
+| **Planner** | Dienst-, Bedarfs- und Personalplanung sowie operative Zeitprüfung |
+| **Employee** | Eigene Schichten, Verfügbarkeiten, Schichtanfragen und Zeiterfassung |
 
-Unternehmen registrieren sich nicht selbst. Neue Unternehmen werden ausschließlich durch den **SuperAdmin** angelegt.
+## Arbeitszeit & Compliance
 
-## Typischer Workflow
+StepPilot unterstützt bei der Prüfung von Arbeitszeit- und Planungsregeln. Die Deutschland-orientierte Regelbasis berücksichtigt unter anderem tägliche Arbeitszeit, Pausen, Ruhezeiten sowie Sonn- und Feiertagsarbeit. Unternehmensspezifische Ausnahmegrundlagen können dokumentiert werden.
 
-```text
-Unternehmen anlegen
-        ↓
-Mitarbeiter & Benutzerkonten verwalten
-        ↓
-Standorte / Abteilungen / Qualifikationen definieren
-        ↓
-Schichten planen und prüfen
-        ↓
-Dienstplan veröffentlichen
-        ↓
-Mitarbeiter werden informiert
-        ↓
-Abwesenheiten / offene Schichten / Schichttausch bearbeiten
-        ↓
-Planqualität und Auswertungen kontrollieren
-```
+**Wichtig:** StepPilot ist keine Rechtsberatung und gibt keine pauschale Garantie für Rechtskonformität. Tarifverträge, Betriebsvereinbarungen, Branchenregeln, besondere Beschäftigtengruppen und gesetzliche Ausnahmen können zu abweichenden Anforderungen führen. Vor einem produktiven Einsatz muss das konkrete Regelprofil für Unternehmen, Branche und Einsatzland geprüft werden.
 
-## Sicherheit & Mandantentrennung
+Siehe [`docs/LEGAL_READINESS.md`](docs/LEGAL_READINESS.md).
 
-StepPilot trennt Unternehmensdaten über die jeweilige `CompanyId`. Geschützte Bereiche kombinieren Rollenprüfungen mit einem zentralen `TenantGuard`, sodass normale Benutzer ausschließlich auf Daten ihres eigenen Unternehmens zugreifen können.
+## Datenschutz & Sicherheit
 
-Zusätzlich prüft die zentrale Autorisierung, ob das Benutzerkonto und das zugeordnete Unternehmen aktiv sind. Für Nicht-Entwicklungsumgebungen werden detaillierte Blazor-Fehler deaktiviert und grundlegende HTTP-Sicherheitsheader gesetzt.
+StepPilot verarbeitet personenbezogene Mitarbeiter-, Planungs- und Arbeitszeitdaten. Für einen produktiven Betrieb müssen Betreiber insbesondere Rechtsgrundlagen, Informationspflichten, Löschfristen, Auftragsverarbeitung, TOMs, Backup/Restore, Incident Response und Berechtigungskonzepte für ihre konkrete Umgebung festlegen.
+
+Technische Sicherheits- und Meldehinweise stehen in [`SECURITY.md`](SECURITY.md).
+
+## Qualitätssicherung
+
+Das Repository enthält eine GitHub-Actions-CI. Bei Pushes und Pull Requests auf `master` wird die Anwendung mit .NET 10 wiederhergestellt und im **Release-Modus mit Warnungen als Fehler** gebaut. Dadurch werden Compilerwarnungen nicht stillschweigend als produktionsreif akzeptiert.
+
+Vor einem Release gehören zusätzlich ein Migrationstest und ein manueller End-to-End-Test zum Release-Gate.
 
 ## Technologie
 
-| Technologie | Einsatz |
-| --- | --- |
-| **ASP.NET Core / Blazor** | Webanwendung und UI-Logik |
-| **C#** | Backend- und Anwendungslogik |
-| **Entity Framework Core** | Datenzugriff und Migrationen |
-| **SQL Server / LocalDB** | Persistente Datenhaltung |
-| **ASP.NET Core Identity** | Login, Benutzer und Rollen |
-| **MudBlazor** | UI-Komponenten und Design |
+`ASP.NET Core 10` · `Blazor` · `C#` · `Entity Framework Core` · `SQL Server` · `ASP.NET Core Identity` · `MudBlazor`
 
 ## Projektstruktur
 
 ```text
 StepPilot/
-├── Components/       # Razor-Komponenten, Layout und Seiten
-├── Data/             # DbContext, Models, Rollen und Migrationen
-├── Services/         # Geschäftslogik und zentrale Services
-├── wwwroot/          # Styles, JavaScript und Branding
-├── Program.cs        # Anwendungskonfiguration
+├── .github/workflows/  # CI
+├── Components/         # Razor-Komponenten, Layout und Seiten
+├── Data/               # DbContext, Identity und Datenzugriff
+├── Models/             # Domänenmodelle
+├── Services/           # Geschäftslogik, Planung, Compliance und Zeiterfassung
+├── docs/               # Betriebs- und Compliance-Dokumentation
+├── wwwroot/            # Styles, Assets und Branding
+├── Program.cs          # Anwendungskonfiguration
+├── SECURITY.md         # Security Policy
 └── README.md
 ```
 
 ## Lokal starten
 
-### Voraussetzungen
-
-- zum Projekt passende aktuelle .NET-SDK-Version
-- SQL Server LocalDB oder kompatible SQL-Server-Instanz
-- Visual Studio oder eine andere .NET-IDE
-
-### 1. Repository klonen
+Voraussetzungen: .NET 10 SDK, SQL Server/LocalDB und Visual Studio oder eine andere .NET-IDE.
 
 ```bash
 git clone https://github.com/Pexiz96/StepPilot.git
 cd StepPilot
-```
-
-### 2. Abhängigkeiten wiederherstellen
-
-```bash
 dotnet restore
+dotnet build
 ```
 
-### 3. Datenbank vorbereiten
-
-In der Package Manager Console von Visual Studio:
+Datenbankmigration in der Visual-Studio-Paket-Manager-Konsole:
 
 ```powershell
 Update-Database
 ```
 
-Alternativ mit installierten EF-Core-Tools:
-
-```bash
-dotnet ef database update
-```
-
-### 4. Anwendung starten
+Anschließend:
 
 ```bash
 dotnet run
 ```
 
-## Projektstatus
+## Produktions-Release-Gate
 
-**StepPilot befindet sich aktuell auf dem Portfolio-/Version-1.0-Stand.** Die zentralen Prozesse einer Mitarbeiter- und Schichtplanung sind umgesetzt und die Anwendung dient als demonstrierbares Full-Stack-/Business-Software-Projekt.
-
-Für einen realen produktiven SaaS-Betrieb wären unter anderem weitere Maßnahmen sinnvoll:
-
-- produktionsreifes Deployment und Secret-Management
-- echter E-Mail-Versand
-- automatisierte Unit-, Integrations- und End-to-End-Tests
-- Monitoring und Logging-Konzept
-- Backup- und Wiederherstellungsstrategie
-- erweiterte Datenschutz- und Betriebsmaßnahmen
-
-## Was dieses Projekt demonstriert
-
-StepPilot zeigt unter anderem praktische Kenntnisse in:
-
-`C#` · `Blazor` · `ASP.NET Core` · `Entity Framework Core` · `SQL Server` · `Identity` · `Rollen & Autorisierung` · `Mandantenfähigkeit` · `Business-Workflows` · `UI/UX`
+Ein produktiver Stand ist erst erreicht, wenn CI und lokaler Release-Build fehlerfrei laufen, alle Migrationen auf produktionsnahen Daten getestet wurden, Mandantentrennung und Rollen geprüft sind, Backup/Restore getestet wurde und die kunden-/betreiberspezifischen Datenschutz-, Vertrags- und Compliance-Dokumente vollständig sind. Die vollständige Checkliste steht in [`docs/LEGAL_READINESS.md`](docs/LEGAL_READINESS.md).
 
 ---
 
 <div align="center">
 
-**StepPilot – Schichtplanung mit Überblick.**
-
-Portfolio-Projekt · Version 1.0
+**StepPilot – Workforce Management mit Überblick.**
 
 </div>
