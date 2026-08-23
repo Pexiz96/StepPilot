@@ -10,9 +10,9 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build-and-regression:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -24,7 +24,10 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore StepPilot.csproj
+        run: dotnet restore StepPilot.slnx
 
-      - name: Build
-        run: dotnet build StepPilot.csproj --configuration Release --no-restore -warnaserror
+      - name: Build release with warnings as errors
+        run: dotnet build StepPilot.slnx --configuration Release --no-restore -warnaserror
+
+      - name: Run regression checks
+        run: dotnet run --project StepPilot.Tests/StepPilot.Tests.csproj --configuration Release --no-build
