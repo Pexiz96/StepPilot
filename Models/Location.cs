@@ -13,13 +13,14 @@ public class Location : TenantEntity
     // Used by compliance services for location-specific public-holiday rules.
     public string? FederalStateCode { get; set; }
 
+    // IANA/Windows time zone identifier. Defaults to Central European time for German locations.
+    // Stored per location so overnight shifts and DST transitions can be evaluated consistently.
+    public string TimeZoneId { get; set; } = "Europe/Berlin";
+
     public bool IsActive { get; set; } = true;
 
     public Company? Company { get; set; }
 
-    // Mitarbeiter, deren Hauptstandort dieser Standort ist.
     public ICollection<Employee> Employees { get; set; } = new List<Employee>();
-
-    // Mitarbeiter, die zusätzlich für diesen Standort freigegeben sind.
     public ICollection<EmployeeLocation> AdditionalEmployees { get; set; } = new List<EmployeeLocation>();
 }
