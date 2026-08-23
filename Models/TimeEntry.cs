@@ -36,7 +36,26 @@ public class TimeEntry : TenantEntity
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
-    public decimal WorkedHours => ClockOutUtc is null
+    public DateTime StartedAtLocal => ClockInUtc.ToLocalTime();
+    public DateTime? EndedAtLocal => ClockOutUtc?.ToLocalTime();
+
+    public int WorkedMinutes => ClockOutUtc is null
         ? 0
-        : Math.Max(0, (decimal)(ClockOutUtc.Value - ClockInUtc).TotalMinutes - BreakMinutes) / 60m;
+        : Math.Max(0, (int)Math.Round((ClockOutUtc.Value - ClockInUtc).TotalMinutes) - BreakMinutes);
+
+    public decimal WorkedHours => WorkedMinutes / 60m;
+
+    public int PlannedMinutes
+    {
+        get
+        {
+            if (Shift is null) return 0;
+            var start = Shift.Date.ToDateTime(Shift.StartTime);
+            var end = Shift.Date.ToDateTime(Shift.EndTime);
+            if (end <= start) end = end.AddDays(1);
+            return Math.Max(0, (int)Math.Round((end - start).TotalMinutes) - Shift.BreakMinutes);
+        }
+    }
+
+    public int VarianceMinutes => WorkedMinutes - PlannedMinutes;
 }
